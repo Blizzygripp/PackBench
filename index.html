@@ -29,8 +29,11 @@ h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.01em}
 .mono{font-family:var(--mono)}
 
 /* ---------- shell ---------- */
-.app{min-height:100%;display:grid;grid-template-columns:212px 1fr;grid-template-rows:auto 1fr;grid-template-areas:"top top" "rail main"}
-.topbar{grid-area:top;display:flex;align-items:center;gap:14px;padding:10px 18px;background:var(--bg2);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:40;flex-wrap:wrap}
+/* Desktop: fixed frame, only the main column scrolls. Mobile: ordinary page flow. */
+html,body{height:100%}
+body{overflow:hidden}
+.app{height:100%;display:grid;grid-template-columns:212px minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);grid-template-areas:"top top" "rail main"}
+.topbar{grid-area:top;display:flex;align-items:center;gap:14px;padding:10px clamp(14px,2vw,22px);background:var(--bg2);border-bottom:1px solid var(--line);z-index:40;flex-wrap:wrap}
 .brand{display:flex;align-items:center;gap:10px;min-width:0}
 .brand .plate{width:26px;height:26px;border-radius:4px;background:linear-gradient(150deg,var(--copper),#8f4f2e 60%,var(--verdigris));flex:none}
 .brand b{font-weight:600;letter-spacing:-.02em}
@@ -52,7 +55,7 @@ input[type=checkbox]{accent-color:var(--copper);width:15px;height:15px}
 .btn.sm{padding:3px 8px;font-size:12px}
 .btn[disabled]{opacity:.45;cursor:not-allowed}
 
-.rail{grid-area:rail;border-right:1px solid var(--line);background:var(--bg2);padding:14px 10px;display:flex;flex-direction:column;gap:2px;position:sticky;top:57px;align-self:start;max-height:calc(100vh - 57px);overflow:auto}
+.rail{grid-area:rail;border-right:1px solid var(--line);background:var(--bg2);padding:14px 10px;display:flex;flex-direction:column;gap:2px;overflow-y:auto;min-height:0}
 .rail a{display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:var(--r);color:var(--dim);text-decoration:none;cursor:pointer;font-size:13.5px}
 .rail a svg{flex:none;opacity:.8}
 .rail a span{white-space:nowrap}
@@ -60,13 +63,28 @@ input[type=checkbox]{accent-color:var(--copper);width:15px;height:15px}
 .rail a.on{background:var(--surface2);color:var(--ink);box-shadow:inset 2px 0 0 var(--copper)}
 .rail .count{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--faint)}
 .rail hr{border:0;border-top:1px solid var(--line-soft);margin:10px 4px}
-main{grid-area:main;padding:22px 26px 80px;max-width:1180px}
 
-@media (max-width:860px){
-  .app{grid-template-columns:1fr;grid-template-areas:"top" "rail" "main"}
-  .rail{flex-direction:row;overflow-x:auto;position:static;max-height:none;border-right:0;border-bottom:1px solid var(--line);padding:8px}
-  .rail hr{display:none}.rail .count{display:none}
-  main{padding:16px 14px 60px}
+main{grid-area:main;overflow-y:auto;min-height:0;padding:24px clamp(16px,3vw,44px) 80px}
+main > *{max-width:1240px;margin-left:auto;margin-right:auto}
+main::-webkit-scrollbar,.rail::-webkit-scrollbar{width:10px}
+main::-webkit-scrollbar-thumb,.rail::-webkit-scrollbar-thumb{background:var(--raise);border-radius:10px;border:3px solid var(--bg)}
+
+/* narrow: nav becomes a strip and the page scrolls normally */
+@media (max-width:900px){
+  html,body{height:auto}
+  body{overflow:visible}
+  .app{height:auto;min-height:100%;grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto minmax(0,1fr);grid-template-areas:"top" "rail" "main"}
+  .topbar{position:sticky;top:0}
+  .rail{flex-direction:row;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;border-right:0;border-bottom:1px solid var(--line);padding:7px 10px;gap:4px}
+  .rail::-webkit-scrollbar{display:none}
+  .rail hr,.rail .count{display:none}
+  main{overflow:visible;padding:18px 16px 60px}
+}
+@media (max-width:640px){
+  .topbar{gap:8px;padding:8px 12px}
+  .brand span{display:none}
+  .field label{display:none}
+  .btn{padding:6px 9px}
 }
 
 /* ---------- generic blocks ---------- */
@@ -611,7 +629,7 @@ function renderRail() {
     `<a class="${tab === id ? 'on' : ''}" data-tab="${id}" tabindex="0">${ICON[id]}<span>${label}</span><span class="count">${counts[id] ?? ''}</span></a>`
   ).join('') + `<hr><a data-act="snapshot" tabindex="0">${ICON.snapshots}<span>Save snapshot</span></a>`;
 }
-function go(t) { tab = t; render(); window.scrollTo({ top: 0 }); }
+function go(t) { tab = t; render(); const m = $('#view'); if (m) m.scrollTop = 0; window.scrollTo({ top: 0 }); }
 function render() {
   renderRail();
   const mcsel = $('#mcsel');
