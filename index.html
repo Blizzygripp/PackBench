@@ -1157,6 +1157,9 @@ function openBuild() {
       <input type="text" id="bver" class="grow" value="${esc(S.settings.packVersion)}">
       <button class="btn sm" id="bbump">+ patch</button></div>
       <div class="hint">Goes in the file name and in <span class="mono">versionId</span>.</div></div></div>
+    <div class="formrow"><div class="k">File name</div><div>
+      <input type="text" id="bname" value="${esc(packFileName())}.mrpack">
+      <div class="hint">What the downloaded file is called. Follows the version above until you type your own.</div></div></div>
     <div class="formrow"><div class="k">What goes in</div><div>
       <label class="row"><input type="checkbox" id="bupd" ${ups.length ? 'checked' : 'disabled'}> Move ${ups.length} mods to their newest ${esc(S.settings.target)} build first</label>
       <label class="row"><input type="checkbox" id="bdrop" ${blocked.length ? 'checked' : 'disabled'}> Leave out ${blocked.length} mods with no ${esc(S.settings.target)} build</label>
@@ -1169,9 +1172,15 @@ function openBuild() {
   $('#dlgfoot').innerHTML = `<div style="flex:1"></div>
     <button class="btn" id="bmr">Build .mrpack</button>
     <button class="btn go" id="bbundle">Build release bundle</button>`;
+  const syncName = () => {
+    if ($('#bname').dataset.touched) return;
+    $('#bname').value = packFileName($('#bver').value.trim()) + '.mrpack';
+  };
+  $('#bname').oninput = () => { $('#bname').dataset.touched = '1'; };
+  $('#bver').oninput = syncName;
   $('#bbump').onclick = () => {
     const p = ($('#bver').value.match(/\d+/g) || ['1', '0', '0']).map(Number);
-    while (p.length < 3) p.push(0); p[2]++; $('#bver').value = p.join('.');
+    while (p.length < 3) p.push(0); p[2]++; $('#bver').value = p.join('.'); syncName();
   };
   const gather = () => {
     const version = $('#bver').value.trim() || S.settings.packVersion;
@@ -1179,11 +1188,16 @@ function openBuild() {
     S.settings.packVersion = version;
     const drop = $('#bdrop').checked && !$('#bdrop').disabled;
     const mods = S.mods.filter(m => !(drop && m.status === 'blocked'));
-    return { version, mods, dropped: S.mods.length - mods.length, overrides: $('#bover').checked && !$('#bover').disabled, snap: $('#bsnap').checked };
+    let fname = ($('#bname').value || '').trim().replace(/[\\/:*?"<>|]+/g, '-').replace(/^\.+/, '');
+    if (!fname) fname = packFileName(version) + '.mrpack';
+    if (!/\.mrpack$/i.test(fname)) fname += '.mrpack';
+    return { version, fname, base: fname.replace(/\.mrpack$/i, ''), mods, dropped: S.mods.length - mods.length,
+      overrides: $('#bover').checked && !$('#bover').disabled, snap: $('#bsnap').checked };
   };
   $('#bmr').onclick = () => {
     const g = gather();
     const p = packBlob(g.mods, { version: g.version }, g.overrides);
+    p.name = g.fname;
     download(p.name, p.blob);
     logit('build', 'Built ' + p.name + ' — ' + p.index.files.length + ' mods' + (g.dropped ? ', ' + g.dropped + ' left out as incompatible' : ''));
     if (g.snap) takeSnapshot('Shipped ' + g.version, true);
@@ -1193,6 +1207,7 @@ function openBuild() {
   $('#bbundle').onclick = async () => {
     const g = gather();
     const p = packBlob(g.mods, { version: g.version }, g.overrides);
+    p.name = g.fname;
     const snap = takeSnapshot('Shipped ' + g.version, true);
     snap.mods = g.mods.map(snapMod);
     const enc = s => new TextEncoder().encode(s);
@@ -1203,7 +1218,7 @@ function openBuild() {
       { name: 'modlist.md', data: enc(buildModTable()) },
       { name: 'snapshot.json', data: enc(JSON.stringify(snapshotFile(snap), null, 2)) }
     ]);
-    download(packFileName(g.version) + '-release.zip', bundle);
+    download(g.base + '-release.zip', bundle);
     logit('build', 'Release bundle for ' + g.version + ' — pack, changelog, status post, mod list, snapshot');
     if (!g.snap) S.snapshots = S.snapshots.filter(s => s.id !== snap.id);
     $('#dlg').close(); save(); render();
