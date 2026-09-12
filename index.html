@@ -181,6 +181,15 @@ dialog footer{display:flex;gap:8px;justify-content:flex-end;padding:12px 16px;bo
 #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--surface2);border:1px solid var(--raise);padding:9px 15px;border-radius:20px;font-size:13px;opacity:0;pointer-events:none;transition:.18s;z-index:90}
 #toast.on{opacity:1;transform:translateX(-50%)}
 .kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:0 4px;color:var(--dim)}
+ol.steps{list-style:none;margin:0;padding:0;counter-reset:step}
+ol.steps li{display:flex;align-items:center;gap:12px;padding:11px 15px;border-bottom:1px solid var(--line-soft);counter-increment:step}
+ol.steps li:last-child{border-bottom:0}
+ol.steps li::before{content:counter(step);flex:none;width:22px;height:22px;border-radius:50%;border:1px solid var(--line);display:grid;place-items:center;font-family:var(--mono);font-size:11px;color:var(--faint)}
+ol.steps li.done::before{border-color:var(--verdigris);color:var(--verdigris)}
+ol.steps li b{font-weight:500;flex:none}
+ol.steps li span{color:var(--faint);font-size:12.5px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ol.steps li .btn{margin-left:auto}
+@media (max-width:640px){ol.steps li{flex-wrap:wrap}ol.steps li span{flex-basis:100%;white-space:normal}}
 ul.plain{margin:0;padding-left:18px}
 ul.plain li{margin:3px 0}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
@@ -209,6 +218,8 @@ ul.plain li{margin:3px 0}
 <div id="toast"></div>
 <dialog id="dlg"><header><h2 id="dlgtitle">Title</h2><div class="spacer" style="flex:1"></div><button class="btn sm ghost" onclick="document.getElementById('dlg').close()">Close</button></header><div class="body" id="dlgbody"></div><footer id="dlgfoot"></footer></dialog>
 <input type="file" id="filepick" accept=".mrpack,.zip,.json" style="display:none">
+<input type="file" id="ovpick" multiple style="display:none">
+<input type="file" id="dirpick" webkitdirectory multiple style="display:none">
 <script>
 /* ============================================================
    Pack Bench — a maintenance desk for a Modrinth modpack
@@ -668,6 +679,7 @@ function viewOverview() {
         <p style="color:var(--faint);font-size:13px;margin:0 0 12px">Export it from the Modrinth App, or grab the file from your project page.</p>
         <button class="btn" data-act="pick">Choose a file</button>
         <button class="btn" data-act="fetchpack">Pull the newest published version</button>
+        <button class="btn" data-act="newpack">Start an empty pack</button>
       </div>
     </div></div>`;
   return `
@@ -687,8 +699,26 @@ function viewOverview() {
       <button class="btn go" data-act="check">Check against MC ${esc(S.settings.target)}</button>
       <button class="btn" data-act="applyall" ${t.update ? '' : 'disabled'}>Apply all ${t.update} updates</button>
       <button class="btn" data-act="snapshot">Save snapshot</button>
-      <button class="btn" data-act="tab:changelog">Write the changelog</button>
+      <button class="btn" data-act="build">Build updated .mrpack</button>
     </div>
+  </div>
+
+  <div class="panel"><header><h2>Ship a version</h2><span class="sub">the run from imported pack to uploaded file</span></header>
+    <ol class="steps">
+      <li${S.lastCheck ? ' class="done"' : ''}><b>Check against MC ${esc(S.settings.target)}</b>
+        <span>${S.lastCheck ? 'last run ' + fmtDate(S.lastCheck) : 'find out what has builds and what does not'}</span>
+        <button class="btn sm" data-act="check">Run</button></li>
+      <li${S.snapshots.length ? ' class="done"' : ''}><b>Snapshot what is live now</b>
+        <span>${S.snapshots.length ? 'newest: ' + esc(S.snapshots[0].label) : 'this becomes the baseline the changelog is measured from'}</span>
+        <button class="btn sm" data-act="snapshot">Save</button></li>
+      <li${t.update ? '' : ' class="done"'}><b>Move mods to their newest build</b>
+        <span>${t.update ? t.update + ' waiting' : 'everything checked is on its newest build'}</span>
+        <button class="btn sm" data-act="applyall" ${t.update ? '' : 'disabled'}>Apply</button></li>
+      <li><b>Write the changelog</b><span>diffed against the baseline snapshot, ready to paste</span>
+        <button class="btn sm" data-act="tab:changelog">Open</button></li>
+      <li><b>Build the file</b><span>a fresh .mrpack${t.blocked ? ', leaving out the ' + t.blocked + ' mods with no build' : ''} — or the whole release bundle</span>
+        <button class="btn sm" data-act="build">Build</button></li>
+    </ol>
   </div>
 
   ${blocked.length ? `<div class="panel"><header><h2>Holding the release back</h2>
@@ -732,7 +762,7 @@ function viewMods() {
       <div style="flex:1"></div>
       <button class="btn sm" data-act="addmod">Add a mod</button>
       <button class="btn sm" data-act="pick">Load .mrpack</button>
-      <button class="btn sm" data-act="rebuild">Build updated .mrpack</button>
+      <button class="btn sm" data-act="build">Build updated .mrpack</button>
       <button class="btn sm" data-act="indexjson">Export index.json</button>
     </div>
     <div class="tablewrap"><table>
@@ -751,6 +781,20 @@ function viewMods() {
           <button class="btn sm" data-open="${m.key}">Details</button></div></td></tr>`).join('')
       || '<tr><td colspan="5" style="padding:26px;text-align:center;color:var(--faint)">No mods match that filter.</td></tr>'}
       </tbody></table></div>
+  </div>
+  <div class="panel"><header><h2>Overrides</h2>
+    <span class="sub">${OVERRIDES.length ? OVERRIDES.length + ' files ride along inside the pack' : 'configs, resource packs, options.txt — anything that is not a mod jar'}</span>
+    <div class="spacer"></div>
+    <button class="btn sm" data-act="addoverride">Add files</button>
+    <button class="btn sm" data-act="addfolder">Add a folder</button>
+    ${OVERRIDES.length ? '<button class="btn sm" data-act="clearoverrides">Remove all</button>' : ''}</header>
+    ${OVERRIDES.length ? `<div class="tablewrap"><table><tbody>${OVERRIDES.slice(0, 200).map((o, i) => `<tr>
+      <td class="mono" style="font-size:12px;word-break:break-all">${esc(o.name)}</td>
+      <td class="vers" style="width:1%">${kb(o.data.length)}</td>
+      <td style="width:1%"><button class="btn sm" data-act="deloverride:${i}">Remove</button></td></tr>`).join('')}
+      </tbody></table></div>` : '<div class="empty"><p>No overrides loaded. They come in with a .mrpack, or add your own here.</p></div>'}
+    <div class="body" style="border-top:1px solid var(--line-soft);color:var(--faint);font-size:12.5px">
+      Override files live in memory for this session only — they are too big to keep in browser storage. Reload the .mrpack before building if you have refreshed the page.</div>
   </div>
   <div class="panel"><div class="body"><div class="drop" id="drop">
     Drop a <span class="mono">.mrpack</span> here to replace the list. Your pins and notes are kept for mods that stay.
@@ -906,16 +950,35 @@ function viewChangelog() {
 }
 
 /* ---------------- snapshots ---------------- */
-function takeSnapshot(label) {
+function snapMod(m) {
+  return {
+    pid: m.pid, slug: m.slug, title: m.title, verId: m.verId, verNum: m.verNum,
+    filename: m.filename, path: m.path || ('mods/' + m.filename), url: m.url,
+    sha1: m.sha1, sha512: m.sha512, size: m.size, env: m.env,
+    clientSide: m.clientSide, serverSide: m.serverSide,
+    pinned: m.pinned, note: m.note, status: m.status, newestMC: m.newestMC
+  };
+}
+function takeSnapshot(label, quiet) {
   const s = {
     id: uid(), ts: Date.now(), label: label || (S.settings.packName + ' ' + S.settings.packVersion),
-    packVersion: S.settings.packVersion, mc: S.settings.target,
-    mods: S.mods.map(m => ({ pid: m.pid, title: m.title, slug: m.slug, verNum: m.verNum, verId: m.verId }))
+    packVersion: S.settings.packVersion, mc: S.settings.target, loader: S.settings.loader,
+    loaderVersion: S.settings.loaderVersion, mods: S.mods.map(snapMod)
   };
   S.snapshots.unshift(s);
   if (!clOpts.base) clOpts.base = s.id;
   logit('snapshot', 'Snapshot saved: ' + s.label + ' (' + s.mods.length + ' mods)');
-  save(); render(); toast('Snapshot saved');
+  save();
+  if (!quiet) { render(); toast('Snapshot saved'); }
+  return s;
+}
+function snapshotFile(s) {
+  return {
+    packBench: 1, kind: 'snapshot', savedAt: new Date(s.ts).toISOString(),
+    name: S.settings.packName, packVersion: s.packVersion, minecraft: s.mc,
+    loader: s.loader || S.settings.loader, modCount: s.mods.length,
+    mods: s.mods.map(m => ({ title: m.title, slug: m.slug, projectId: m.pid, version: m.verNum, versionId: m.verId, status: m.status }))
+  };
 }
 function viewSnapshots() {
   if (!S.snapshots.length) return `
@@ -935,7 +998,9 @@ function viewSnapshots() {
         <div class="grow"><b>${esc(s.label)}</b> <span class="tag t-idle">MC ${esc(s.mc)}</span>
           <div style="color:var(--faint);font-size:12.5px;margin-top:2px">${s.mods.length} mods${d ? ` · +${d.added.length} added, ${d.updated.length} updated, −${d.removed.length} removed` : ''}</div></div>
         <div class="rowbtns">
-          <button class="btn sm" data-act="usebase:${s.id}">Use as baseline</button>
+          <button class="btn sm" data-act="buildsnap:${s.id}">Build .mrpack</button>
+          <button class="btn sm" data-act="dlsnap:${s.id}">Save .json</button>
+          <button class="btn sm" data-act="usebase:${s.id}">Baseline</button>
           <button class="btn sm" data-act="restore:${s.id}">Restore</button>
           <button class="btn sm" data-act="delsnap:${s.id}">Delete</button></div></div>`;
     }).join('')}
@@ -950,11 +1015,12 @@ function diffTwo(a, b) {
 }
 function restoreSnapshot(id) {
   const s = S.snapshots.find(x => x.id === id); if (!s) return;
-  if (!confirm('Replace the current mod list with the snapshot from ' + fmtDate(s.ts) + '? Version numbers and pins come back; file hashes do not, so run a check afterwards.')) return;
-  S.mods = s.mods.map(m => ({ key: uid(), pid: m.pid, slug: m.slug, title: m.title, verId: m.verId, verNum: m.verNum, filename: m.title + '.jar', status: 'idle', flags: [], pinned: false, note: '' }));
+  if (!confirm('Replace the current mod list with the snapshot from ' + fmtDate(s.ts) + '?')) return;
+  S.mods = s.mods.map(m => ({ ...m, key: uid(), status: m.status || 'idle', flags: [], pinned: !!m.pinned, note: m.note || '' }));
   S.settings.packVersion = s.packVersion || S.settings.packVersion;
-  logit('restore', 'Restored snapshot ' + s.label);
-  save(); render(); toast('Snapshot restored — run a check to refill the details');
+  if (s.mc) S.settings.target = s.mc;
+  logit('restore', 'Restored snapshot ' + s.label + ' (' + s.mods.length + ' mods)');
+  save(); render(); toast('Snapshot restored');
 }
 
 /* ---------------- tasks ---------------- */
@@ -1040,17 +1106,23 @@ function viewSettings() {
 }
 
 /* ---------------- exports ---------------- */
-function buildIndexJson() {
-  const deps = { minecraft: S.settings.target };
-  if (S.settings.loader === 'fabric') deps['fabric-loader'] = S.settings.loaderVersion || PACKDEPS['fabric-loader'] || '0.16.0';
-  if (S.settings.loader === 'quilt') deps['quilt-loader'] = S.settings.loaderVersion || PACKDEPS['quilt-loader'] || '0.26.0';
-  if (S.settings.loader === 'neoforge') deps['neoforge'] = S.settings.loaderVersion || PACKDEPS['neoforge'] || '21.0.0';
-  if (S.settings.loader === 'forge') deps['forge'] = S.settings.loaderVersion || PACKDEPS['forge'] || '';
+function buildIndexJson(mods, meta) {
+  mods = mods || S.mods;
+  meta = meta || {};
+  const version = meta.version || S.settings.packVersion;
+  const mc = meta.mc || S.settings.target;
+  const loader = meta.loader || S.settings.loader;
+  const lv = meta.loaderVersion || S.settings.loaderVersion;
+  const deps = { minecraft: mc };
+  if (loader === 'fabric') deps['fabric-loader'] = lv || PACKDEPS['fabric-loader'] || '0.16.0';
+  if (loader === 'quilt') deps['quilt-loader'] = lv || PACKDEPS['quilt-loader'] || '0.26.0';
+  if (loader === 'neoforge') deps['neoforge'] = lv || PACKDEPS['neoforge'] || '21.0.0';
+  if (loader === 'forge') deps['forge'] = lv || PACKDEPS['forge'] || '';
   return {
     formatVersion: 1, game: 'minecraft',
-    versionId: S.settings.packVersion, name: S.settings.packName + ' ' + S.settings.packVersion,
+    versionId: version, name: S.settings.packName + ' ' + version,
     summary: 'Built with Pack Bench on ' + new Date().toISOString().slice(0, 10),
-    files: S.mods.filter(m => m.url && m.sha512).map(m => ({
+    files: mods.filter(m => m.url && m.sha512).map(m => ({
       path: m.path || ('mods/' + m.filename),
       hashes: { sha1: m.sha1, sha512: m.sha512 },
       env: m.env || { client: 'required', server: m.serverSide === 'unsupported' ? 'unsupported' : 'optional' },
@@ -1059,16 +1131,106 @@ function buildIndexJson() {
     dependencies: deps
   };
 }
-function rebuildPack() {
-  const index = buildIndexJson();
-  const skipped = S.mods.length - index.files.length;
-  const files = [{ name: 'modrinth.index.json', data: new TextEncoder().encode(JSON.stringify(index, null, 2)) },
-    ...OVERRIDES.map(o => ({ name: o.name, data: o.data }))];
-  const blob = makeZip(files);
-  const name = S.settings.packName.replace(/\s+/g, '-') + '-' + S.settings.packVersion + '.mrpack';
-  download(name, blob);
-  logit('build', 'Built ' + name + ' with ' + index.files.length + ' mods' + (OVERRIDES.length ? ' and ' + OVERRIDES.length + ' override files' : ''));
-  toast(skipped ? name + ' built — ' + skipped + ' mods skipped, they have no download link' : name + ' built');
+const packFileName = v => S.settings.packName.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + (v || S.settings.packVersion);
+
+/* Assemble a .mrpack from a mod list plus the overrides folder. Returns {blob,name,index,skipped}. */
+function packBlob(mods, meta, withOverrides) {
+  const index = buildIndexJson(mods, meta);
+  const files = [{ name: 'modrinth.index.json', data: new TextEncoder().encode(JSON.stringify(index, null, 2)) }];
+  if (withOverrides !== false) OVERRIDES.forEach(o => files.push({ name: o.name, data: o.data }));
+  return {
+    blob: makeZip(files), index,
+    name: packFileName(meta && meta.version) + '.mrpack',
+    skipped: mods.length - index.files.length
+  };
+}
+
+/* ---- the build / release dialog ---- */
+function openBuild() {
+  if (!S.mods.length) { alertBox('Nothing to build', 'Load or create a pack first.'); return; }
+  const blocked = S.mods.filter(m => m.status === 'blocked');
+  const ups = S.mods.filter(m => m.status === 'update');
+  const nofile = S.mods.filter(m => !(m.url && m.sha512));
+  $('#dlgtitle').textContent = 'Build the pack file';
+  $('#dlgbody').innerHTML = `
+    <div class="formrow"><div class="k">Version number</div><div><div class="row">
+      <input type="text" id="bver" class="grow" value="${esc(S.settings.packVersion)}">
+      <button class="btn sm" id="bbump">+ patch</button></div>
+      <div class="hint">Goes in the file name and in <span class="mono">versionId</span>.</div></div></div>
+    <div class="formrow"><div class="k">What goes in</div><div>
+      <label class="row"><input type="checkbox" id="bupd" ${ups.length ? 'checked' : 'disabled'}> Move ${ups.length} mods to their newest ${esc(S.settings.target)} build first</label>
+      <label class="row"><input type="checkbox" id="bdrop" ${blocked.length ? 'checked' : 'disabled'}> Leave out ${blocked.length} mods with no ${esc(S.settings.target)} build</label>
+      <label class="row"><input type="checkbox" id="bover" ${OVERRIDES.length ? 'checked' : 'disabled'}> Include ${OVERRIDES.length} files from overrides (configs, resource packs)</label>
+    </div></div>
+    <div class="formrow"><div class="k">On the side</div><div>
+      <label class="row"><input type="checkbox" id="bsnap" checked> Save a snapshot of exactly what you shipped</label>
+      <div class="hint">The snapshot becomes the baseline for the next changelog.</div></div></div>
+    ${nofile.length ? `<p style="color:var(--amber);font-size:12.5px;margin:12px 0 0">${nofile.length} mods have no download link yet, so they cannot go in the file. Run a check, then apply their updates.</p>` : ''}`;
+  $('#dlgfoot').innerHTML = `<div style="flex:1"></div>
+    <button class="btn" id="bmr">Build .mrpack</button>
+    <button class="btn go" id="bbundle">Build release bundle</button>`;
+  $('#bbump').onclick = () => {
+    const p = ($('#bver').value.match(/\d+/g) || ['1', '0', '0']).map(Number);
+    while (p.length < 3) p.push(0); p[2]++; $('#bver').value = p.join('.');
+  };
+  const gather = () => {
+    const version = $('#bver').value.trim() || S.settings.packVersion;
+    if ($('#bupd').checked && !$('#bupd').disabled) applyUpdates(null);
+    S.settings.packVersion = version;
+    const drop = $('#bdrop').checked && !$('#bdrop').disabled;
+    const mods = S.mods.filter(m => !(drop && m.status === 'blocked'));
+    return { version, mods, dropped: S.mods.length - mods.length, overrides: $('#bover').checked && !$('#bover').disabled, snap: $('#bsnap').checked };
+  };
+  $('#bmr').onclick = () => {
+    const g = gather();
+    const p = packBlob(g.mods, { version: g.version }, g.overrides);
+    download(p.name, p.blob);
+    logit('build', 'Built ' + p.name + ' — ' + p.index.files.length + ' mods' + (g.dropped ? ', ' + g.dropped + ' left out as incompatible' : ''));
+    if (g.snap) takeSnapshot('Shipped ' + g.version, true);
+    $('#dlg').close(); save(); render();
+    toast(p.name + ' built' + (p.skipped ? ' — ' + p.skipped + ' mods skipped, no download link' : ''));
+  };
+  $('#bbundle').onclick = async () => {
+    const g = gather();
+    const p = packBlob(g.mods, { version: g.version }, g.overrides);
+    const snap = takeSnapshot('Shipped ' + g.version, true);
+    snap.mods = g.mods.map(snapMod);
+    const enc = s => new TextEncoder().encode(s);
+    const bundle = makeZip([
+      { name: p.name, data: new Uint8Array(await p.blob.arrayBuffer()) },
+      { name: 'changelog.md', data: enc(buildChangelog()) },
+      { name: 'pack-status.md', data: enc(buildStatusBlock()) },
+      { name: 'modlist.md', data: enc(buildModTable()) },
+      { name: 'snapshot.json', data: enc(JSON.stringify(snapshotFile(snap), null, 2)) }
+    ]);
+    download(packFileName(g.version) + '-release.zip', bundle);
+    logit('build', 'Release bundle for ' + g.version + ' — pack, changelog, status post, mod list, snapshot');
+    if (!g.snap) S.snapshots = S.snapshots.filter(s => s.id !== snap.id);
+    $('#dlg').close(); save(); render();
+    toast('Release bundle ready');
+  };
+  $('#dlg').showModal();
+}
+async function buildFromSnapshot(id) {
+  const s = S.snapshots.find(x => x.id === id); if (!s) return;
+  let mods = s.mods;
+  if (!mods.some(m => m.url && m.sha512)) {
+    const ids = mods.map(m => m.verId).filter(Boolean);
+    if (!ids.length) { alertBox('Cannot rebuild that one', 'This snapshot predates file tracking and has no version IDs. Restore it, run a check, then build.'); return; }
+    busy(true, 'Fetching the files for that snapshot', 40);
+    try {
+      const vs = await mr('/versions?ids=' + encodeURIComponent(JSON.stringify(ids)));
+      const by = {}; vs.forEach(v => by[v.id] = v);
+      mods = mods.map(m => {
+        const v = by[m.verId], f = v ? primaryFile(v) : null;
+        return !f ? m : { ...m, filename: f.filename, path: 'mods/' + f.filename, url: f.url, size: f.size, sha1: f.hashes?.sha1, sha512: f.hashes?.sha512 };
+      });
+    } catch (e) { alertBox('Could not rebuild', apiFail(e)); return; } finally { busy(false); }
+  }
+  const p = packBlob(mods, { version: s.packVersion, mc: s.mc, loader: s.loader, loaderVersion: s.loaderVersion }, false);
+  download(p.name, p.blob);
+  logit('build', 'Rebuilt ' + p.name + ' from the snapshot taken ' + isoMin(s.ts));
+  toast(p.name + ' built from snapshot' + (OVERRIDES.length ? ' (overrides not included — they are not stored in snapshots)' : ''));
 }
 function alertBox(title, msg) {
   $('#dlgtitle').textContent = title;
@@ -1122,7 +1284,19 @@ function act(a) {
     case 'savemod': { const m = M(arg); if (m) { m.pinned = $('#mpin').checked; m.note = $('#mnote').value; save(); } $('#dlg').close(); render(); toast('Saved'); break; }
     case 'removemod': { const m = M(arg); if (m && confirm('Remove ' + m.title + ' from the pack list?')) { S.mods = S.mods.filter(x => x.key !== arg); logit('remove', 'Removed ' + m.title); save(); render(); } $('#dlg').close(); break; }
     case 'addmod': { const r = prompt('Modrinth slug or URL, e.g. sodium or https://modrinth.com/mod/sodium'); if (r) addModByRef(r); break; }
-    case 'rebuild': rebuildPack(); break;
+    case 'build': case 'rebuild': openBuild(); break;
+    case 'buildsnap': buildFromSnapshot(arg); break;
+    case 'dlsnap': { const s = S.snapshots.find(x => x.id === arg); if (s) download('snapshot-' + (s.packVersion || 'pack') + '-' + new Date(s.ts).toISOString().slice(0, 10) + '.json', JSON.stringify(snapshotFile(s), null, 2), 'application/json'); break; }
+    case 'addoverride': { const i = $('#ovpick'); i.dataset.sub = '1'; i.click(); break; }
+    case 'addfolder': $('#dirpick').click(); break;
+    case 'deloverride': { const o = OVERRIDES[+arg]; OVERRIDES.splice(+arg, 1); if (o) logit('overrides', 'Removed ' + o.name); render(); break; }
+    case 'clearoverrides': if (confirm('Remove all ' + OVERRIDES.length + ' override files from the build?')) { OVERRIDES = []; render(); } break;
+    case 'newpack': {
+      if (S.mods.length && !confirm('Start an empty pack? The current mod list is replaced.')) break;
+      S.mods = []; OVERRIDES = []; PACKDEPS = {};
+      logit('load', 'Started an empty pack');
+      save(); go('mods'); toast('Empty pack — add mods with the Add a mod button'); break;
+    }
     case 'indexjson': download('modrinth.index.json', JSON.stringify(buildIndexJson(), null, 2), 'application/json'); break;
     case 'addtask': { const i = $('#newtask'); if (i.value.trim()) { S.tasks.unshift({ id: uid(), text: i.value.trim(), done: false, ts: Date.now() }); save(); render(); } break; }
     case 'toggletask': { const t = S.tasks.find(x => x.id === arg); if (t) { t.done = !t.done; save(); render(); } break; }
@@ -1197,6 +1371,20 @@ function wire() {
     drop.ondrop = e => { e.preventDefault(); e.stopPropagation(); drop.classList.remove('hot'); handleFile(e.dataTransfer.files[0]); };
   }
 }
+async function addOverrides(list, sub) {
+  const files = [...list]; if (!files.length) return;
+  let n = 0;
+  for (const f of files) {
+    const rel = (f.webkitRelativePath || ((sub ? sub + '/' : '') + f.name)).replace(/^\/+/, '');
+    const name = 'overrides/' + rel;
+    const data = new Uint8Array(await f.arrayBuffer());
+    const at = OVERRIDES.findIndex(o => o.name === name);
+    if (at >= 0) OVERRIDES[at] = { name, data }; else OVERRIDES.push({ name, data });
+    n++;
+  }
+  logit('overrides', 'Added ' + n + ' file' + (n === 1 ? '' : 's') + ' to overrides');
+  render(); toast(n + ' file' + (n === 1 ? '' : 's') + ' added to overrides');
+}
 async function handleFile(file, mode) {
   if (!file) return;
   try {
@@ -1223,12 +1411,19 @@ async function handleFile(file, mode) {
       <div class="row" style="gap:10px">
         <button class="btn go" data-act="pick">Choose a .mrpack file</button>
         <button class="btn" data-act="fetchpack">Pull the newest published version</button>
+        <button class="btn" data-act="newpack">Start an empty pack</button>
       </div>
       <p style="color:var(--faint);font-size:12.5px;margin-bottom:0">Pulling from Modrinth downloads the .mrpack attached to your latest version of <span class="mono">${esc(S.settings.slug)}</span>.</p>`;
     $('#dlgfoot').innerHTML = '';
     document.querySelectorAll('#dlgbody [data-act]').forEach(n => n.onclick = () => { $('#dlg').close(); act(n.dataset.act); });
     $('#dlg').showModal();
   };
+  $('#ovpick').onchange = async e => {
+    const sub = e.target.dataset.sub ? (prompt('Folder inside the pack for these files (blank for the root)', 'config') ?? null) : '';
+    if (sub !== null) await addOverrides(e.target.files, sub.replace(/^\/+|\/+$/g, ''));
+    e.target.value = ''; e.target.dataset.sub = '';
+  };
+  $('#dirpick').onchange = async e => { await addOverrides(e.target.files, ''); e.target.value = ''; };
   $('#filepick').onchange = e => {
     const mode = e.target.dataset.mode; e.target.dataset.mode = '';
     handleFile(e.target.files[0], mode); e.target.value = '';
