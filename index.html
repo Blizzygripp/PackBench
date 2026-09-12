@@ -1,0 +1,1233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pack Bench — Client Optimized</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#1b1f27; --bg2:#21262f; --surface:#272d38; --surface2:#2e3543; --raise:#39414f;
+  --line:#39414f; --line-soft:#2f3745;
+  --ink:#e9ecf2; --dim:#9aa4b6; --faint:#6d7789;
+  --copper:#c9784a; --verdigris:#58a98d; --redstone:#d1493f; --lapis:#5c8ad6; --amber:#d7a341;
+  --copper-bg:rgba(201,120,74,.14); --verdigris-bg:rgba(88,169,141,.14);
+  --redstone-bg:rgba(209,73,63,.14); --lapis-bg:rgba(92,138,214,.14); --amber-bg:rgba(215,163,65,.14);
+  --sans:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --r:6px;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+a{color:var(--lapis)}
+h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.01em}
+.mono{font-family:var(--mono)}
+
+/* ---------- shell ---------- */
+.app{min-height:100%;display:grid;grid-template-columns:212px 1fr;grid-template-rows:auto 1fr;grid-template-areas:"top top" "rail main"}
+.topbar{grid-area:top;display:flex;align-items:center;gap:14px;padding:10px 18px;background:var(--bg2);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:40;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.brand .plate{width:26px;height:26px;border-radius:4px;background:linear-gradient(150deg,var(--copper),#8f4f2e 60%,var(--verdigris));flex:none}
+.brand b{font-weight:600;letter-spacing:-.02em}
+.brand span{color:var(--faint);font-size:12px}
+.topbar .spacer{flex:1}
+.field{display:flex;align-items:center;gap:7px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:4px 8px}
+.field label{color:var(--faint);font-size:12px}
+.field select,.field input{background:none;border:0;outline:none;font-size:13px}
+.field select{cursor:pointer;color:var(--ink)}
+select option{background:var(--surface2);color:var(--ink)}
+select.box option{background:var(--bg2)}
+input[type=checkbox]{accent-color:var(--copper);width:15px;height:15px}
+.btn{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:6px 11px;cursor:pointer;font-size:13px;display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
+.btn:hover{background:var(--surface2);border-color:var(--raise)}
+.btn:focus-visible,.rail a:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--lapis);outline-offset:1px}
+.btn.go{background:var(--copper);border-color:var(--copper);color:#1b1f27;font-weight:600}
+.btn.go:hover{background:#d5854f}
+.btn.ghost{background:none}
+.btn.sm{padding:3px 8px;font-size:12px}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+
+.rail{grid-area:rail;border-right:1px solid var(--line);background:var(--bg2);padding:14px 10px;display:flex;flex-direction:column;gap:2px;position:sticky;top:57px;align-self:start;max-height:calc(100vh - 57px);overflow:auto}
+.rail a{display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:var(--r);color:var(--dim);text-decoration:none;cursor:pointer;font-size:13.5px}
+.rail a svg{flex:none;opacity:.8}
+.rail a span{white-space:nowrap}
+.rail a:hover{background:var(--surface);color:var(--ink)}
+.rail a.on{background:var(--surface2);color:var(--ink);box-shadow:inset 2px 0 0 var(--copper)}
+.rail .count{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--faint)}
+.rail hr{border:0;border-top:1px solid var(--line-soft);margin:10px 4px}
+main{grid-area:main;padding:22px 26px 80px;max-width:1180px}
+
+@media (max-width:860px){
+  .app{grid-template-columns:1fr;grid-template-areas:"top" "rail" "main"}
+  .rail{flex-direction:row;overflow-x:auto;position:static;max-height:none;border-right:0;border-bottom:1px solid var(--line);padding:8px}
+  .rail hr{display:none}.rail .count{display:none}
+  main{padding:16px 14px 60px}
+}
+
+/* ---------- generic blocks ---------- */
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;margin-bottom:18px}
+.panel > header{display:flex;align-items:center;gap:10px;padding:12px 15px;border-bottom:1px solid var(--line-soft);flex-wrap:wrap}
+.panel > header h2{font-size:14.5px}
+.panel > header .sub{color:var(--faint);font-size:12.5px}
+.panel > header .spacer{flex:1}
+.panel .body{padding:15px}
+.lede{color:var(--dim);max-width:68ch;margin:0 0 16px}
+.pagehead{display:flex;align-items:baseline;gap:12px;margin-bottom:4px;flex-wrap:wrap}
+.pagehead h1{font-size:21px}
+.pagehead .sub{color:var(--faint);font-size:13px}
+
+.empty{padding:34px 20px;text-align:center;color:var(--dim)}
+.empty h3{margin-bottom:6px;color:var(--ink);font-size:15px}
+.empty p{margin:0 auto 14px;max-width:46ch;font-size:13.5px}
+
+.tag{display:inline-flex;align-items:center;gap:5px;padding:1px 7px;border-radius:20px;font-size:11.5px;font-family:var(--mono);border:1px solid transparent;white-space:nowrap}
+.t-current{background:var(--verdigris-bg);color:var(--verdigris);border-color:rgba(88,169,141,.3)}
+.t-update{background:var(--copper-bg);color:var(--copper);border-color:rgba(201,120,74,.3)}
+.t-blocked{background:var(--redstone-bg);color:var(--redstone);border-color:rgba(209,73,63,.3)}
+.t-warn{background:var(--amber-bg);color:var(--amber);border-color:rgba(215,163,65,.3)}
+.t-info{background:var(--lapis-bg);color:var(--lapis);border-color:rgba(92,138,214,.3)}
+.t-idle{background:var(--surface2);color:var(--faint);border-color:var(--line)}
+
+/* ---------- readiness ribbon ---------- */
+.ribbon{display:flex;gap:3px;align-items:flex-end;height:52px;padding:14px 15px;background:var(--bg2);border-bottom:1px solid var(--line-soft);border-radius:8px 8px 0 0;overflow:hidden}
+.ribbon b{display:block;flex:1 1 8px;min-width:5px;height:100%;border-radius:2px;cursor:pointer;transition:transform .12s ease}
+.ribbon b:hover{transform:scaleY(1.14)}
+.s-current{background:var(--verdigris)}
+.s-update{background:var(--copper)}
+.s-blocked{background:var(--redstone)}
+.s-warn{background:var(--amber)}
+.s-idle{background:var(--raise)}
+.tally{display:flex;flex-wrap:wrap;gap:0;border-bottom:1px solid var(--line-soft)}
+.tally div{flex:1 1 120px;padding:13px 15px;border-right:1px solid var(--line-soft)}
+.tally div:last-child{border-right:0}
+.tally .n{font-family:var(--mono);font-size:23px;line-height:1.1;font-weight:500}
+.tally .l{color:var(--faint);font-size:12px;margin-top:2px}
+
+/* ---------- table ---------- */
+.tablewrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-weight:500;color:var(--faint);font-size:12px;padding:8px 12px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--surface);cursor:pointer;white-space:nowrap}
+th:hover{color:var(--ink)}
+td{padding:9px 12px;border-bottom:1px solid var(--line-soft);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--surface2)}
+td.name{font-weight:500}
+td .slug{color:var(--faint);font-family:var(--mono);font-size:11.5px;display:block}
+.vers{font-family:var(--mono);font-size:12px;color:var(--dim);white-space:nowrap}
+.vers .to{color:var(--copper)}
+.rowbtns{display:flex;gap:6px;justify-content:flex-end}
+.filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px 15px;border-bottom:1px solid var(--line-soft)}
+.filters input[type=search]{background:var(--bg);border:1px solid var(--line);border-radius:var(--r);padding:5px 9px;min-width:190px;outline:none}
+.chip{border:1px solid var(--line);background:none;border-radius:20px;padding:3px 10px;font-size:12px;cursor:pointer;color:var(--dim)}
+.chip.on{background:var(--surface2);color:var(--ink);border-color:var(--raise)}
+
+/* ---------- misc ---------- */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media (max-width:900px){.grid2{grid-template-columns:1fr}}
+.out{width:100%;min-height:340px;background:var(--bg);border:1px solid var(--line);border-radius:var(--r);padding:12px;font-family:var(--mono);font-size:12.5px;line-height:1.65;resize:vertical;outline:none;white-space:pre;overflow-wrap:normal;overflow-x:auto}
+textarea.note{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:var(--r);padding:9px;outline:none;resize:vertical;min-height:64px;font-size:13px}
+input[type=text],input[type=number],select.box{background:var(--bg);border:1px solid var(--line);border-radius:var(--r);padding:6px 9px;outline:none;width:100%}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.row > .grow{flex:1;min-width:150px}
+.formrow{display:grid;grid-template-columns:170px 1fr;gap:12px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line-soft)}
+.formrow:last-child{border-bottom:0}
+.formrow .k{color:var(--dim);font-size:13px}
+.formrow .hint{color:var(--faint);font-size:12px;margin-top:3px}
+@media (max-width:640px){.formrow{grid-template-columns:1fr;gap:5px}}
+
+.item{display:flex;gap:12px;padding:11px 15px;border-bottom:1px solid var(--line-soft);align-items:flex-start}
+.item:last-child{border-bottom:0}
+.item .grow{flex:1;min-width:0}
+.item time{color:var(--faint);font-family:var(--mono);font-size:11.5px;white-space:nowrap}
+.logline{display:flex;gap:10px;padding:5px 15px;font-size:12.5px;border-bottom:1px solid var(--line-soft)}
+.logline time{color:var(--faint);font-family:var(--mono);font-size:11.5px;flex:none;width:130px}
+.logline .kind{width:74px;flex:none;font-family:var(--mono);font-size:11px;color:var(--faint)}
+
+.drop{border:1.5px dashed var(--line);border-radius:8px;padding:26px;text-align:center;color:var(--dim);background:var(--bg2)}
+.drop.hot{border-color:var(--copper);background:var(--copper-bg);color:var(--ink)}
+.bar{height:3px;background:var(--line-soft);border-radius:3px;overflow:hidden;flex:1;min-width:120px}
+.bar i{display:block;height:100%;background:var(--copper);width:0;transition:width .2s}
+.wait{display:none;align-items:center;gap:10px;font-size:12.5px;color:var(--dim);flex:1 1 200px}
+.wait.on{display:flex}
+
+dialog{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:9px;padding:0;max-width:620px;width:calc(100% - 32px)}
+dialog::backdrop{background:rgba(10,12,16,.7)}
+dialog header{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid var(--line-soft)}
+dialog .body{padding:16px;max-height:64vh;overflow:auto}
+dialog footer{display:flex;gap:8px;justify-content:flex-end;padding:12px 16px;border-top:1px solid var(--line-soft)}
+#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--surface2);border:1px solid var(--raise);padding:9px 15px;border-radius:20px;font-size:13px;opacity:0;pointer-events:none;transition:.18s;z-index:90}
+#toast.on{opacity:1;transform:translateX(-50%)}
+.kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:0 4px;color:var(--dim)}
+ul.plain{margin:0;padding-left:18px}
+ul.plain li{margin:3px 0}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <div class="plate"></div>
+      <div>
+        <b>Pack Bench</b><br><span id="brandsub">Client Optimized · modrinth.com/modpack/clientoptimized</span>
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <div class="wait" id="wait"><span id="waittext">Working</span><div class="bar"><i id="waitbar"></i></div></div>
+    <div class="field"><label for="mcsel">Target MC</label><select id="mcsel"></select></div>
+    <button class="btn" id="btnload">Load pack</button>
+    <button class="btn go" id="btncheck">Check compatibility</button>
+  </header>
+
+  <nav class="rail" id="rail"></nav>
+  <main id="view"></main>
+</div>
+
+<div id="toast"></div>
+<dialog id="dlg"><header><h2 id="dlgtitle">Title</h2><div class="spacer" style="flex:1"></div><button class="btn sm ghost" onclick="document.getElementById('dlg').close()">Close</button></header><div class="body" id="dlgbody"></div><footer id="dlgfoot"></footer></dialog>
+<input type="file" id="filepick" accept=".mrpack,.zip,.json" style="display:none">
+<script>
+/* ============================================================
+   Pack Bench — a maintenance desk for a Modrinth modpack
+   Single file. Works offline-ish: all data lives in your browser.
+   ============================================================ */
+
+const API = 'https://api.modrinth.com/v2';
+const KEY = 'packbench:v1';
+
+const DEFAULTS = {
+  slug: 'clientoptimized',
+  packName: 'Client Optimized',
+  packVersion: '1.0.8',
+  loader: 'fabric',
+  loaderVersion: '',
+  target: '26.2',
+  targets: ['26.2', '26.1.2', '1.21.11', '1.21.10'],
+  channels: { release: true, beta: false, alpha: false },
+  clientOnly: true
+};
+
+let S = {
+  settings: { ...DEFAULTS },
+  mods: [],          // {pid, slug, title, verId, verNum, filename, sha1, sha512, size, url, env, pinned, note,
+                     //  status, tgtVerId, tgtVerNum, tgtUrl, tgtSha1, tgtSha512, tgtSize, tgtFilename, newestMC, flags[]}
+  snapshots: [],     // {id, ts, label, mc, packVersion, mods:[{pid,title,slug,verNum,verId}]}
+  tasks: [],         // {id, text, done, ts}
+  log: [],           // {ts, kind, text}
+  lastCheck: null
+};
+let OVERRIDES = [];  // {name, data:Uint8Array} kept in memory only
+let PACKDEPS = {};   // dependencies block from the loaded modrinth.index.json
+let tab = 'overview';
+let inflight = false;
+
+/* ---------------- storage (works in artifact sandbox and as a local file) --------- */
+const mem = {};
+const store = {
+  async get(k) {
+    if (window.storage) { try { const r = await window.storage.get(k); return r ? JSON.parse(r.value) : null; } catch (e) { return null; } }
+    try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch (e) { return mem[k] ?? null; }
+  },
+  async set(k, v) {
+    if (window.storage) { try { await window.storage.set(k, JSON.stringify(v)); return; } catch (e) {} }
+    try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { mem[k] = v; }
+  }
+};
+let saveTimer = null;
+function save() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    const slim = { ...S, mods: S.mods.map(m => ({ ...m, _proj: undefined })) };
+    store.set(KEY, slim);
+  }, 250);
+}
+async function load() {
+  const d = await store.get(KEY);
+  if (d) { S = { ...S, ...d }; S.settings = { ...DEFAULTS, ...(d.settings || {}) }; }
+}
+
+/* ---------------- tiny helpers ---------------- */
+const $ = s => document.querySelector(s);
+const el = (t, c, h) => { const n = document.createElement(t); if (c) n.className = c; if (h != null) n.innerHTML = h; return n; };
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const uid = () => Math.random().toString(36).slice(2, 9);
+const fmtDate = ts => new Date(ts).toLocaleString(undefined, { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+const isoMin = ts => new Date(ts).toISOString().slice(0, 16).replace('T', ' ');
+const kb = n => n == null ? '' : (n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.round(n / 1024) + ' KB');
+
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.classList.add('on');
+  clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('on'), 2600);
+}
+function logit(kind, text) {
+  S.log.unshift({ ts: Date.now(), kind, text });
+  if (S.log.length > 800) S.log.length = 800;
+  save();
+}
+function busy(on, text, pct) {
+  inflight = on;
+  $('#wait').classList.toggle('on', on);
+  if (text) $('#waittext').textContent = text;
+  $('#waitbar').style.width = (pct == null ? 0 : pct) + '%';
+  $('#btncheck').disabled = on; $('#btnload').disabled = on;
+}
+function copy(text, what) {
+  navigator.clipboard?.writeText(text).then(() => toast((what || 'Text') + ' copied'),
+    () => toast('Clipboard blocked — select the text and copy manually'));
+}
+function download(name, data, type) {
+  const blob = data instanceof Blob ? data : new Blob([data], { type: type || 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+/* ---------------- Modrinth API ---------------- */
+async function mr(path, opts) {
+  const res = await fetch(API + path, opts);
+  if (res.status === 429) throw new Error('Modrinth rate limit hit. Wait a minute and run the check again.');
+  if (!res.ok) throw new Error('Modrinth returned ' + res.status + ' for ' + path);
+  return res.json();
+}
+function apiFail(e) {
+  const msg = String(e && e.message || e);
+  if (/Failed to fetch|NetworkError|Load failed/i.test(msg))
+    return 'The browser blocked the call to api.modrinth.com. Save this page as a file and open it directly in Chrome or Firefox, then try again.';
+  return msg;
+}
+async function pool(items, n, fn, onTick) {
+  const out = new Array(items.length); let i = 0, done = 0;
+  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => {
+    while (i < items.length) {
+      const k = i++;
+      try { out[k] = await fn(items[k], k); } catch (e) { out[k] = { __err: String(e.message || e) }; }
+      done++; onTick && onTick(done, items.length);
+    }
+  }));
+  return out;
+}
+const chunk = (a, n) => { const o = []; for (let i = 0; i < a.length; i += n) o.push(a.slice(i, i + n)); return o; };
+
+async function getProjects(ids) {
+  const out = {};
+  for (const c of chunk([...new Set(ids)], 60)) {
+    const list = await mr('/projects?ids=' + encodeURIComponent(JSON.stringify(c)));
+    list.forEach(p => { out[p.id] = p; out[p.slug] = p; });
+  }
+  return out;
+}
+async function versionsByHash(hashes) {
+  const out = {};
+  for (const c of chunk(hashes, 200)) {
+    const r = await mr('/version_files', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hashes: c, algorithm: 'sha512' })
+    });
+    Object.assign(out, r);
+  }
+  return out;
+}
+async function latestByHash(hashes, loaders, gvs) {
+  const out = {};
+  for (const c of chunk(hashes, 200)) {
+    const r = await mr('/version_files/update', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hashes: c, algorithm: 'sha512', loaders, game_versions: gvs })
+    });
+    Object.assign(out, r);
+  }
+  return out;
+}
+const projectVersions = pid => mr('/project/' + encodeURIComponent(pid) + '/version');
+
+function channelOK(v) {
+  const c = S.settings.channels || {};
+  return !!c[v.version_type] || v.version_type === 'release' && c.release !== false;
+}
+function fitsTarget(v, gv, loader) {
+  return (v.game_versions || []).includes(gv) && (v.loaders || []).includes(loader);
+}
+function pickNewest(list) {
+  return list.slice().sort((a, b) => new Date(b.date_published) - new Date(a.date_published))[0];
+}
+function primaryFile(v) {
+  return (v.files || []).find(f => f.primary) || (v.files || [])[0] || null;
+}
+
+/* ---------------- zip in / zip out (no libraries) ---------------- */
+async function inflateRaw(u8) {
+  if (!('DecompressionStream' in window)) throw new Error('This browser cannot unzip. Use Chrome, Edge or Firefox.');
+  const s = new Blob([u8]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+  return new Uint8Array(await new Response(s).arrayBuffer());
+}
+async function readZip(buf) {
+  const u8 = new Uint8Array(buf), dv = new DataView(buf);
+  let eo = -1;
+  for (let i = u8.length - 22; i >= Math.max(0, u8.length - 66000); i--) if (dv.getUint32(i, true) === 0x06054b50) { eo = i; break; }
+  if (eo < 0) throw new Error('That is not a zip/.mrpack file.');
+  const count = dv.getUint16(eo + 10, true);
+  let off = dv.getUint32(eo + 16, true);
+  const entries = [];
+  for (let i = 0; i < count; i++) {
+    if (dv.getUint32(off, true) !== 0x02014b50) break;
+    const method = dv.getUint16(off + 10, true);
+    const csize = dv.getUint32(off + 20, true);
+    const nlen = dv.getUint16(off + 28, true), elen = dv.getUint16(off + 30, true), clen = dv.getUint16(off + 32, true);
+    const lho = dv.getUint32(off + 42, true);
+    const name = new TextDecoder().decode(u8.subarray(off + 46, off + 46 + nlen));
+    entries.push({ name, method, csize, lho });
+    off += 46 + nlen + elen + clen;
+  }
+  for (const e of entries) {
+    if (e.name.endsWith('/')) { e.data = new Uint8Array(0); continue; }
+    const ln = dv.getUint16(e.lho + 26, true), le = dv.getUint16(e.lho + 28, true);
+    const start = e.lho + 30 + ln + le;
+    const raw = u8.subarray(start, start + e.csize);
+    e.data = e.method === 0 ? raw.slice() : await inflateRaw(raw);
+  }
+  return entries;
+}
+const CRCT = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(u8) { let c = 0xFFFFFFFF; for (let i = 0; i < u8.length; i++) c = CRCT[(c ^ u8[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+function makeZip(files) { // stored (no compression) — every launcher accepts it
+  const enc = new TextEncoder(); const parts = []; const central = []; let off = 0;
+  for (const f of files) {
+    const name = enc.encode(f.name), data = f.data, crc = crc32(data);
+    const lh = new Uint8Array(30 + name.length); const d = new DataView(lh.buffer);
+    d.setUint32(0, 0x04034b50, true); d.setUint16(4, 20, true); d.setUint16(6, 0x0800, true);
+    d.setUint16(8, 0, true); d.setUint32(14, crc, true); d.setUint32(18, data.length, true);
+    d.setUint32(22, data.length, true); d.setUint16(26, name.length, true);
+    lh.set(name, 30);
+    const cd = new Uint8Array(46 + name.length); const c = new DataView(cd.buffer);
+    c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true);
+    c.setUint32(16, crc, true); c.setUint32(20, data.length, true); c.setUint32(24, data.length, true);
+    c.setUint16(28, name.length, true); c.setUint32(42, off, true);
+    cd.set(name, 46);
+    parts.push(lh, data); central.push(cd); off += lh.length + data.length;
+  }
+  let cdlen = 0; central.forEach(c => cdlen += c.length);
+  const end = new Uint8Array(22); const e = new DataView(end.buffer);
+  e.setUint32(0, 0x06054b50, true); e.setUint16(8, central.length, true); e.setUint16(10, central.length, true);
+  e.setUint32(12, cdlen, true); e.setUint32(16, off, true);
+  return new Blob([...parts, ...central, end], { type: 'application/x-modrinth-modpack+zip' });
+}
+
+/* ---------------- loading a pack ---------------- */
+function modFromIndexFile(f) {
+  return {
+    key: uid(), pid: null, slug: null, title: f.path.split('/').pop().replace(/\.jar$/i, ''),
+    path: f.path, filename: f.path.split('/').pop(),
+    sha1: f.hashes?.sha1 || '', sha512: f.hashes?.sha512 || '',
+    size: f.fileSize, url: (f.downloads || [])[0] || '', env: f.env || null,
+    verId: null, verNum: '?', pinned: false, note: '', status: 'idle', flags: []
+  };
+}
+async function ingestMrpack(buf, sourceLabel) {
+  const entries = await readZip(buf);
+  const idx = entries.find(e => e.name === 'modrinth.index.json');
+  if (!idx) throw new Error('No modrinth.index.json inside — is that really a .mrpack?');
+  const index = JSON.parse(new TextDecoder().decode(idx.data));
+  PACKDEPS = index.dependencies || {};
+  OVERRIDES = entries.filter(e => /^(client-)?overrides\//.test(e.name) && e.data.length).map(e => ({ name: e.name, data: e.data }));
+  const jars = (index.files || []).filter(f => /\.jar$/i.test(f.path));
+  const keep = {}; S.mods.forEach(m => { if (m.sha512) keep[m.sha512] = m; });
+  S.mods = jars.map(f => {
+    const m = modFromIndexFile(f);
+    const old = keep[m.sha512];
+    if (old) { m.pinned = old.pinned; m.note = old.note; }
+    return m;
+  });
+  S.settings.packVersion = index.versionId || S.settings.packVersion;
+  S.settings.packName = index.name || S.settings.packName;
+  if (PACKDEPS.minecraft && !S.settings.targets.includes(PACKDEPS.minecraft)) S.settings.targets.unshift(PACKDEPS.minecraft);
+  if (PACKDEPS['fabric-loader']) { S.settings.loader = 'fabric'; S.settings.loaderVersion = PACKDEPS['fabric-loader']; }
+  else if (PACKDEPS['quilt-loader']) S.settings.loader = 'quilt';
+  else if (PACKDEPS['neoforge']) S.settings.loader = 'neoforge';
+  else if (PACKDEPS['forge']) S.settings.loader = 'forge';
+  logit('load', 'Loaded ' + S.mods.length + ' mods from ' + sourceLabel + ' (' + (index.name || '?') + ' ' + (index.versionId || '') + ')');
+  await hydrate();
+  save(); render();
+  toast(S.mods.length + ' mods loaded');
+}
+async function hydrate() { // fill in project/version identity for hashed mods
+  busy(true, 'Matching files to Modrinth', 15);
+  const hashes = S.mods.map(m => m.sha512).filter(Boolean);
+  const byHash = hashes.length ? await versionsByHash(hashes) : {};
+  const pids = [];
+  S.mods.forEach(m => {
+    const v = byHash[m.sha512];
+    if (v) { m.pid = v.project_id; m.verId = v.id; m.verNum = v.version_number; pids.push(v.project_id); }
+  });
+  busy(true, 'Fetching mod pages', 55);
+  if (pids.length) {
+    const projs = await getProjects(pids);
+    S.mods.forEach(m => {
+      const p = projs[m.pid]; if (!p) return;
+      m.title = p.title; m.slug = p.slug; m.clientSide = p.client_side; m.serverSide = p.server_side;
+      m.projStatus = p.status; m.categories = p.categories || []; m.icon = p.icon_url;
+    });
+  }
+  busy(false);
+}
+async function loadFromModrinth() {
+  busy(true, 'Asking Modrinth for the newest pack file', 10);
+  try {
+    const vs = await mr('/project/' + S.settings.slug + '/version');
+    if (!vs.length) throw new Error('That pack has no published versions.');
+    const v = pickNewest(vs);
+    const f = primaryFile(v);
+    busy(true, 'Downloading ' + f.filename, 45);
+    const res = await fetch(f.url);
+    if (!res.ok) throw new Error('Could not download ' + f.filename);
+    const buf = await res.arrayBuffer();
+    busy(true, 'Unpacking', 75);
+    await ingestMrpack(buf, 'Modrinth (' + v.version_number + ')');
+  } catch (e) { alertBox('Could not load from Modrinth', apiFail(e)); }
+  finally { busy(false); }
+}
+
+/* ---------------- the compatibility pass ---------------- */
+async function checkAll() {
+  if (!S.mods.length) { alertBox('Nothing to check', 'Load your pack first — drop a .mrpack on the Mods tab or press Load pack.'); return; }
+  const gv = S.settings.target, loader = S.settings.loader;
+  busy(true, 'Checking ' + S.mods.length + ' mods against MC ' + gv, 5);
+  try {
+    const hashed = S.mods.filter(m => m.sha512);
+    let latest = {};
+    if (hashed.length) latest = await latestByHash(hashed.map(m => m.sha512), [loader], [gv]);
+    busy(true, 'Reading version lists', 30);
+
+    const needList = S.mods.filter(m => {
+      const v = m.sha512 ? latest[m.sha512] : null;
+      return !(v && channelOK(v));
+    });
+    const lists = await pool(needList.filter(m => m.pid), 4, m => projectVersions(m.pid),
+      (d, t) => busy(true, 'Reading version lists (' + d + '/' + t + ')', 30 + 45 * d / t));
+    const listBy = {}; needList.filter(m => m.pid).forEach((m, i) => listBy[m.key] = lists[i]);
+
+    const wantPids = [];
+    S.mods.forEach(m => {
+      m.flags = []; m.tgtVerId = null; m.tgtVerNum = null; m.newestMC = null; m.deps = [];
+      let v = m.sha512 ? latest[m.sha512] : null;
+      if (v && !channelOK(v)) v = null;
+      if (!v) {
+        const list = listBy[m.key];
+        if (Array.isArray(list)) {
+          const fits = list.filter(x => fitsTarget(x, gv, loader) && channelOK(x));
+          v = fits.length ? pickNewest(fits) : null;
+          if (!v) {
+            const newest = pickNewest(list.filter(x => (x.loaders || []).includes(loader))) || pickNewest(list);
+            if (newest) m.newestMC = (newest.game_versions || []).slice().sort().pop();
+          }
+        } else if (list && list.__err) { m.flags.push('lookup failed'); }
+      }
+      if (v) {
+        const f = primaryFile(v);
+        m.tgtVerId = v.id; m.tgtVerNum = v.version_number; m.tgtChannel = v.version_type;
+        m.tgtFilename = f?.filename; m.tgtUrl = f?.url; m.tgtSize = f?.size;
+        m.tgtSha1 = f?.hashes?.sha1; m.tgtSha512 = f?.hashes?.sha512;
+        m.deps = (v.dependencies || []).filter(d => d.dependency_type === 'required' && d.project_id).map(d => d.project_id);
+        m.deps.forEach(p => wantPids.push(p));
+        m.status = (m.verId && v.id === m.verId) ? 'current' : 'update';
+        if (m.pinned && m.status === 'update') m.status = 'current';
+      } else {
+        m.status = 'blocked';
+      }
+      if (m.projStatus && !['approved', 'unlisted'].includes(m.projStatus)) m.flags.push(m.projStatus);
+      if (S.settings.clientOnly && m.serverSide === 'required') m.flags.push('needs server side');
+      if (m.clientSide === 'unsupported') m.flags.push('not client-side');
+    });
+
+    // required dependencies that are not in the pack
+    const have = new Set(S.mods.map(m => m.pid).filter(Boolean));
+    const missing = [...new Set(wantPids)].filter(p => !have.has(p));
+    if (missing.length) {
+      const projs = await getProjects(missing).catch(() => ({}));
+      S.mods.forEach(m => {
+        const miss = (m.deps || []).filter(p => !have.has(p));
+        if (miss.length) {
+          m.flags.push('missing dep: ' + miss.map(p => projs[p]?.title || p).join(', '));
+        }
+      });
+    }
+    S.mods.forEach(m => { if (m.status !== 'blocked' && m.flags.length) m.status = m.status === 'update' ? 'update' : 'warn'; });
+    S.lastCheck = Date.now();
+    const t = tally();
+    logit('check', 'Checked against MC ' + gv + ' — ' + t.current + ' current, ' + t.update + ' updatable, ' + t.blocked + ' blocked');
+    save(); render();
+    toast('Check done: ' + t.blocked + ' blocked, ' + t.update + ' with updates');
+  } catch (e) {
+    alertBox('Check stopped', apiFail(e));
+  } finally { busy(false); }
+}
+
+function tally() {
+  const t = { current: 0, update: 0, blocked: 0, warn: 0, idle: 0, total: S.mods.length };
+  S.mods.forEach(m => t[m.status] = (t[m.status] || 0) + 1);
+  t.ready = t.total ? Math.round(100 * (t.total - (t.blocked || 0) - (t.idle || 0)) / t.total) : 0;
+  return t;
+}
+function applyUpdates(keys) {
+  let n = 0;
+  S.mods.forEach(m => {
+    if (keys && !keys.includes(m.key)) return;
+    if (m.status === 'update' && m.tgtVerId) {
+      logit('update', m.title + ': ' + m.verNum + ' → ' + m.tgtVerNum);
+      m.verId = m.tgtVerId; m.verNum = m.tgtVerNum;
+      m.filename = m.tgtFilename || m.filename; m.path = 'mods/' + (m.tgtFilename || m.filename);
+      m.url = m.tgtUrl || m.url; m.size = m.tgtSize ?? m.size;
+      m.sha1 = m.tgtSha1 || m.sha1; m.sha512 = m.tgtSha512 || m.sha512;
+      m.status = 'current'; n++;
+    }
+  });
+  save(); render();
+  toast(n ? n + ' mods moved to their newest build' : 'Nothing to apply');
+}
+
+/* ============================ views ============================ */
+const ICON = {
+  overview: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1.5" y="2.5" width="13" height="4"/><rect x="1.5" y="9.5" width="6" height="4"/><rect x="9.5" y="9.5" width="5" height="4"/></svg>',
+  mods: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 1.6 14 5v6L8 14.4 2 11V5z"/><path d="M2 5l6 3.4L14 5M8 8.4v6"/></svg>',
+  changelog: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3.5 1.5h6l3 3v10h-9z"/><path d="M5.5 7.5h5M5.5 10.5h5"/></svg>',
+  snapshots: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="6"/><path d="M8 4.5V8l2.4 1.6"/></svg>',
+  tasks: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 4.5l2 2 3-3.5M2 11.5l2 2 3-3.5M9.5 5h5M9.5 12h5"/></svg>',
+  log: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2.5 3.5h11M2.5 8h11M2.5 12.5h7"/></svg>',
+  settings: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="2.4"/><path d="M8 1.6v2M8 12.4v2M1.6 8h2M12.4 8h2M3.5 3.5l1.4 1.4M11.1 11.1l1.4 1.4M12.5 3.5l-1.4 1.4M4.9 11.1L3.5 12.5"/></svg>'
+};
+const TABS = [
+  ['overview', 'Overview'], ['mods', 'Mods'], ['changelog', 'Changelog'],
+  ['snapshots', 'Snapshots'], ['tasks', 'To do'], ['log', 'History'], ['settings', 'Settings']
+];
+
+function renderRail() {
+  const t = tally();
+  const counts = { mods: S.mods.length || '', snapshots: S.snapshots.length || '', tasks: S.tasks.filter(x => !x.done).length || '', log: '' };
+  $('#rail').innerHTML = TABS.map(([id, label]) =>
+    `<a class="${tab === id ? 'on' : ''}" data-tab="${id}" tabindex="0">${ICON[id]}<span>${label}</span><span class="count">${counts[id] ?? ''}</span></a>`
+  ).join('') + `<hr><a data-act="snapshot" tabindex="0">${ICON.snapshots}<span>Save snapshot</span></a>`;
+}
+function go(t) { tab = t; render(); window.scrollTo({ top: 0 }); }
+function render() {
+  renderRail();
+  const mcsel = $('#mcsel');
+  mcsel.innerHTML = S.settings.targets.map(v => `<option ${v === S.settings.target ? 'selected' : ''}>${esc(v)}</option>`).join('');
+  $('#brandsub').textContent = S.settings.packName + ' · modrinth.com/modpack/' + S.settings.slug;
+  const v = $('#view');
+  v.innerHTML = ({ overview: viewOverview, mods: viewMods, changelog: viewChangelog, snapshots: viewSnapshots, tasks: viewTasks, log: viewLog, settings: viewSettings })[tab]();
+  wire();
+}
+
+/* ---------------- overview ---------------- */
+function ribbon() {
+  if (!S.mods.length) return '';
+  return `<div class="ribbon">${S.mods.map(m =>
+    `<b class="s-${m.status}" data-open="${m.key}" title="${esc(m.title)} — ${statusWord(m)}"></b>`).join('')}</div>`;
+}
+function statusWord(m) {
+  if (m.status === 'current') return 'on newest build' + (m.pinned ? ' (pinned)' : '');
+  if (m.status === 'update') return 'update to ' + m.tgtVerNum;
+  if (m.status === 'blocked') return 'no build for MC ' + S.settings.target + (m.newestMC ? ', newest targets ' + m.newestMC : '');
+  if (m.status === 'warn') return m.flags.join(', ');
+  return 'not checked yet';
+}
+function viewOverview() {
+  const t = tally();
+  const blocked = S.mods.filter(m => m.status === 'blocked');
+  const ups = S.mods.filter(m => m.status === 'update');
+  const warns = S.mods.filter(m => m.flags && m.flags.length);
+  const last = S.lastCheck ? fmtDate(S.lastCheck) : 'never';
+  if (!S.mods.length) return `
+    <div class="pagehead"><h1>Nothing loaded yet</h1></div>
+    <p class="lede">Pack Bench keeps track of every mod in Client Optimized, tells you which ones already have a build for the Minecraft version you are moving to, and writes the changelog for you.</p>
+    <div class="panel"><div class="body">
+      <div class="drop" id="drop">
+        <h3 style="margin-bottom:6px">Drop your <span class="mono">.mrpack</span> here</h3>
+        <p style="color:var(--faint);font-size:13px;margin:0 0 12px">Export it from the Modrinth App, or grab the file from your project page.</p>
+        <button class="btn" data-act="pick">Choose a file</button>
+        <button class="btn" data-act="fetchpack">Pull the newest published version</button>
+      </div>
+    </div></div>`;
+  return `
+  <div class="pagehead"><h1>${esc(S.settings.packName)} ${esc(S.settings.packVersion)}</h1>
+    <span class="sub">${t.total} mods · ${esc(S.settings.loader)} · last checked ${last}</span></div>
+  <p class="lede">Every bar below is one mod, coloured by how it stands against MC ${esc(S.settings.target)}. Click one to open it.</p>
+  <div class="panel">
+    ${ribbon()}
+    <div class="tally">
+      <div><div class="n" style="color:var(--verdigris)">${t.current}</div><div class="l">on the newest build</div></div>
+      <div><div class="n" style="color:var(--copper)">${t.update}</div><div class="l">have an update</div></div>
+      <div><div class="n" style="color:var(--redstone)">${t.blocked}</div><div class="l">no ${esc(S.settings.target)} build</div></div>
+      <div><div class="n" style="color:var(--amber)">${warns.length}</div><div class="l">need a look</div></div>
+      <div><div class="n">${t.ready}%</div><div class="l">ready to ship</div></div>
+    </div>
+    <div class="body row">
+      <button class="btn go" data-act="check">Check against MC ${esc(S.settings.target)}</button>
+      <button class="btn" data-act="applyall" ${t.update ? '' : 'disabled'}>Apply all ${t.update} updates</button>
+      <button class="btn" data-act="snapshot">Save snapshot</button>
+      <button class="btn" data-act="tab:changelog">Write the changelog</button>
+    </div>
+  </div>
+
+  ${blocked.length ? `<div class="panel"><header><h2>Holding the release back</h2>
+    <span class="sub">${blocked.length} mods have no ${esc(S.settings.target)} build yet</span><div class="spacer"></div>
+    <button class="btn sm" data-act="tasksfromblocked">Add these to my to-do</button></header>
+    <div class="tablewrap"><table><tbody>${blocked.map(m => `<tr>
+      <td class="name">${esc(m.title)}<span class="slug">${esc(m.slug || m.filename)}</span></td>
+      <td class="vers">${m.newestMC ? 'newest build targets MC ' + esc(m.newestMC) : 'no matching build found'}</td>
+      <td style="width:1%"><div class="rowbtns">
+        ${m.slug ? `<a class="btn sm" href="https://modrinth.com/mod/${esc(m.slug)}" target="_blank" rel="noopener">Open</a>` : ''}
+        <button class="btn sm" data-open="${m.key}">Details</button></div></td></tr>`).join('')}
+    </tbody></table></div></div>` : ''}
+
+  ${ups.length ? `<div class="panel"><header><h2>Ready to bump</h2><span class="sub">${ups.length} mods have a newer build for ${esc(S.settings.target)}</span>
+    <div class="spacer"></div><button class="btn sm" data-act="applyall">Apply all</button></header>
+    <div class="tablewrap"><table><tbody>${ups.slice(0, 40).map(m => `<tr>
+      <td class="name">${esc(m.title)}</td>
+      <td class="vers">${esc(m.verNum)} <span class="to">→ ${esc(m.tgtVerNum)}</span>${m.tgtChannel && m.tgtChannel !== 'release' ? ' <span class="tag t-warn">' + esc(m.tgtChannel) + '</span>' : ''}</td>
+      <td style="width:1%"><div class="rowbtns"><button class="btn sm" data-act="apply:${m.key}">Apply</button>
+      <button class="btn sm" data-open="${m.key}">Details</button></div></td></tr>`).join('')}
+    </tbody></table></div></div>` : ''}
+
+  ${warns.length ? `<div class="panel"><header><h2>Worth a second look</h2><span class="sub">flags raised during the last check</span></header>
+    <div class="tablewrap"><table><tbody>${warns.map(m => `<tr><td class="name">${esc(m.title)}</td>
+      <td>${m.flags.map(f => `<span class="tag t-warn">${esc(f)}</span> `).join('')}</td>
+      <td style="width:1%"><button class="btn sm" data-open="${m.key}">Details</button></td></tr>`).join('')}
+    </tbody></table></div></div>` : ''}`;
+}
+
+/* ---------------- mods ---------------- */
+let filter = { q: '', status: 'all', sort: 'title', dir: 1 };
+function viewMods() {
+  const rows = filteredMods();
+  return `
+  <div class="pagehead"><h1>Mods</h1><span class="sub">${S.mods.length} in the pack · showing ${rows.length}</span></div>
+  <div class="panel">
+    <div class="filters">
+      <input type="search" id="q" placeholder="Search name, file or slug" value="${esc(filter.q)}">
+      ${['all', 'current', 'update', 'blocked', 'warn', 'pinned'].map(s =>
+        `<button class="chip ${filter.status === s ? 'on' : ''}" data-filter="${s}">${s === 'all' ? 'Everything' : s === 'warn' ? 'Flagged' : s}</button>`).join('')}
+      <div style="flex:1"></div>
+      <button class="btn sm" data-act="addmod">Add a mod</button>
+      <button class="btn sm" data-act="pick">Load .mrpack</button>
+      <button class="btn sm" data-act="rebuild">Build updated .mrpack</button>
+      <button class="btn sm" data-act="indexjson">Export index.json</button>
+    </div>
+    <div class="tablewrap"><table>
+      <thead><tr>
+        <th data-sort="title">Mod</th><th data-sort="verNum">In pack</th>
+        <th data-sort="tgtVerNum">Newest for ${esc(S.settings.target)}</th>
+        <th data-sort="status">Status</th><th style="text-align:right">&nbsp;</th>
+      </tr></thead>
+      <tbody>${rows.map(m => `<tr>
+        <td class="name">${m.pinned ? '<span class="tag t-info">pin</span> ' : ''}${esc(m.title)}<span class="slug">${esc(m.slug || m.filename)}</span></td>
+        <td class="vers">${esc(m.verNum || '?')}</td>
+        <td class="vers">${m.status === 'blocked' ? '<span style="color:var(--faint)">' + (m.newestMC ? 'targets ' + esc(m.newestMC) : '—') + '</span>' : esc(m.tgtVerNum || '—')}</td>
+        <td><span class="tag t-${m.status}">${m.status}</span>${(m.flags || []).length ? ' <span class="tag t-warn">!</span>' : ''}</td>
+        <td style="width:1%"><div class="rowbtns">
+          ${m.status === 'update' ? `<button class="btn sm" data-act="apply:${m.key}">Apply</button>` : ''}
+          <button class="btn sm" data-open="${m.key}">Details</button></div></td></tr>`).join('')
+      || '<tr><td colspan="5" style="padding:26px;text-align:center;color:var(--faint)">No mods match that filter.</td></tr>'}
+      </tbody></table></div>
+  </div>
+  <div class="panel"><div class="body"><div class="drop" id="drop">
+    Drop a <span class="mono">.mrpack</span> here to replace the list. Your pins and notes are kept for mods that stay.
+  </div></div></div>`;
+}
+function filteredMods() {
+  const q = filter.q.toLowerCase();
+  let r = S.mods.filter(m => {
+    if (filter.status === 'pinned' && !m.pinned) return false;
+    if (filter.status === 'warn' && !(m.flags || []).length) return false;
+    if (!['all', 'pinned', 'warn'].includes(filter.status) && m.status !== filter.status) return false;
+    if (!q) return true;
+    return (m.title + ' ' + (m.slug || '') + ' ' + (m.filename || '') + ' ' + (m.note || '')).toLowerCase().includes(q);
+  });
+  const k = filter.sort;
+  r.sort((a, b) => String(a[k] ?? '').localeCompare(String(b[k] ?? ''), undefined, { numeric: true }) * filter.dir);
+  return r;
+}
+function openMod(key) {
+  const m = S.mods.find(x => x.key === key); if (!m) return;
+  $('#dlgtitle').textContent = m.title;
+  $('#dlgbody').innerHTML = `
+    <div class="row" style="margin-bottom:12px">
+      <span class="tag t-${m.status}">${statusWord(m)}</span>
+      ${(m.flags || []).map(f => `<span class="tag t-warn">${esc(f)}</span>`).join('')}
+      ${m.categories ? m.categories.slice(0, 4).map(c => `<span class="tag t-idle">${esc(c)}</span>`).join('') : ''}
+    </div>
+    <div class="formrow"><div class="k">Modrinth page</div><div>${m.slug ? `<a href="https://modrinth.com/mod/${esc(m.slug)}" target="_blank" rel="noopener">modrinth.com/mod/${esc(m.slug)}</a>` : '<span style="color:var(--faint)">not matched to a project — the file may be hand-built</span>'}</div></div>
+    <div class="formrow"><div class="k">Version in pack</div><div class="mono">${esc(m.verNum || '?')}</div></div>
+    <div class="formrow"><div class="k">Newest for ${esc(S.settings.target)}</div><div class="mono">${esc(m.tgtVerNum || '—')} ${m.tgtChannel && m.tgtChannel !== 'release' ? '<span class="tag t-warn">' + esc(m.tgtChannel) + '</span>' : ''}</div></div>
+    <div class="formrow"><div class="k">File</div><div class="mono" style="word-break:break-all;font-size:12px">${esc(m.filename)}<div class="hint">${kb(m.size)}</div></div></div>
+    <div class="formrow"><div class="k">Environment</div><div>client: ${esc(m.clientSide || '?')} · server: ${esc(m.serverSide || '?')}</div></div>
+    <div class="formrow"><div class="k">Keep this version</div><div><label class="row"><input type="checkbox" id="mpin" ${m.pinned ? 'checked' : ''}> Pinned — never auto-update this one</label></div></div>
+    <div class="formrow"><div class="k">Note</div><div><textarea class="note" id="mnote" placeholder="Why it is here, config quirks, anything future-you will forget">${esc(m.note || '')}</textarea></div></div>`;
+  $('#dlgfoot').innerHTML = `
+    <button class="btn" data-act="removemod:${m.key}">Remove from pack</button>
+    <div style="flex:1"></div>
+    ${m.status === 'update' ? `<button class="btn" data-act="apply:${m.key}">Apply ${esc(m.tgtVerNum)}</button>` : ''}
+    <button class="btn go" data-act="savemod:${m.key}">Save</button>`;
+  document.querySelectorAll('#dlgfoot [data-act]').forEach(n => n.onclick = () => act(n.dataset.act));
+  $('#dlg').showModal();
+}
+
+/* ---------------- changelog ---------------- */
+let clOpts = { base: '', links: true, versions: true, blocked: true, style: 'markdown' };
+function diffAgainst(snap) {
+  const prev = new Map((snap?.mods || []).map(m => [m.pid || m.title, m]));
+  const now = new Map(S.mods.map(m => [m.pid || m.title, m]));
+  const added = [], removed = [], updated = [], same = [];
+  now.forEach((m, k) => {
+    const p = prev.get(k);
+    if (!p) added.push(m);
+    else if (p.verNum !== m.verNum) updated.push({ ...m, from: p.verNum });
+    else same.push(m);
+  });
+  prev.forEach((p, k) => { if (!now.has(k)) removed.push(p); });
+  const by = (a, b) => a.title.localeCompare(b.title);
+  return { added: added.sort(by), removed: removed.sort(by), updated: updated.sort(by), same };
+}
+function link(m) {
+  return m.slug ? `modrinth.com/mod/${m.slug}` : '';
+}
+function buildChangelog() {
+  const snap = S.snapshots.find(s => s.id === clOpts.base);
+  const d = diffAgainst(snap);
+  const V = clOpts.versions, L = clOpts.links;
+  const blocked = S.mods.filter(m => m.status === 'blocked');
+  const line = m => `- **${m.title}**${V && m.verNum ? ` \`${m.verNum}\`` : ''}${L && link(m) ? ` (${link(m)})` : ''}`;
+  const upline = m => `- **${m.title}** ${m.from ? `\`${m.from}\` → ` : ''}\`${m.verNum}\``;
+  const out = [];
+  out.push(`# ${S.settings.packName} ${S.settings.packVersion} — MC ${S.settings.target}`);
+  out.push('');
+  if (snap) out.push(`Changes since ${snap.packVersion || snap.label} (${new Date(snap.ts).toISOString().slice(0, 10)}).`);
+  else out.push(`No baseline snapshot picked, so everything below is listed as added.`);
+  out.push('');
+  if (d.added.length) { out.push('## Added'); d.added.forEach(m => out.push(line(m))); out.push(''); }
+  if (d.updated.length) { out.push('## Updated'); d.updated.forEach(m => out.push(upline(m))); out.push(''); }
+  if (d.removed.length) { out.push('## Removed'); d.removed.forEach(m => out.push(line(m))); out.push(''); }
+  if (clOpts.blocked && blocked.length) {
+    out.push('## Temporarily incompatible');
+    blocked.forEach(m => out.push(`- **${m.title}** — newest build targets MC ${m.newestMC || '?'}${L && link(m) ? ` (${link(m)})` : ''}`));
+    out.push('');
+  }
+  if (!d.added.length && !d.updated.length && !d.removed.length) out.push('_No mod changes since the baseline._');
+  let text = out.join('\n').trim();
+  if (clOpts.style === 'plain') text = text.replace(/[*`#]/g, '').replace(/^- /gm, '• ');
+  if (clOpts.style === 'html') text = mdToHtml(text);
+  return text;
+}
+function mdToHtml(md) {
+  const out = []; let inList = false;
+  const inline = s => esc(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/`(.+?)`/g, '<code>$1</code>');
+  for (const l of md.split('\n')) {
+    const isItem = /^- /.test(l);
+    if (isItem && !inList) { out.push('<ul>'); inList = true; }
+    if (!isItem && inList) { out.push('</ul>'); inList = false; }
+    if (isItem) out.push('  <li>' + inline(l.slice(2)) + '</li>');
+    else if (/^# /.test(l)) out.push('<h2>' + inline(l.slice(2)) + '</h2>');
+    else if (/^## /.test(l)) out.push('<h3>' + inline(l.slice(3)) + '</h3>');
+    else if (/^### /.test(l)) out.push('<h4>' + inline(l.slice(4)) + '</h4>');
+    else if (l.trim()) out.push('<p>' + inline(l) + '</p>');
+  }
+  if (inList) out.push('</ul>');
+  return out.join('\n');
+}
+function buildStatusBlock() {
+  const blocked = S.mods.filter(m => m.status === 'blocked');
+  const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ');
+  const out = [`## Pack status — ${stamp} · MC ${S.settings.target}`, ''];
+  if (blocked.length) {
+    out.push('### Temporarily Incompatible', '');
+    blocked.forEach(m => out.push(`- **${m.title}** — newest build targets MC ${m.newestMC || '?'}${link(m) ? ` (${link(m)})` : ''}`));
+  } else {
+    out.push('Every mod in the pack has a build for this version.');
+  }
+  return out.join('\n');
+}
+function buildModTable() {
+  const rows = S.mods.slice().sort((a, b) => a.title.localeCompare(b.title));
+  return ['| Mod | Version | Page |', '| --- | --- | --- |',
+    ...rows.map(m => `| ${m.title} | \`${m.verNum || '?'}\` | ${link(m) ? 'https://' + link(m) : ''} |`)].join('\n');
+}
+function viewChangelog() {
+  const text = buildChangelog();
+  const status = buildStatusBlock();
+  return `
+  <div class="pagehead"><h1>Changelog</h1><span class="sub">built by comparing the pack now against a snapshot</span></div>
+  <p class="lede">Pick the snapshot you published last. Everything that moved since then gets written up, ready to paste into the version changelog box on Modrinth.</p>
+  <div class="panel"><div class="body row">
+    <div class="field"><label for="clbase">Compare against</label>
+      <select id="clbase">${S.snapshots.length ? '' : '<option value="">no snapshots yet</option>'}
+        ${S.snapshots.map(s => `<option value="${s.id}" ${clOpts.base === s.id ? 'selected' : ''}>${esc(s.packVersion || s.label)} · ${new Date(s.ts).toISOString().slice(0, 10)}</option>`).join('')}
+      </select></div>
+    <div class="field"><label for="clstyle">Format</label><select id="clstyle">
+      ${['markdown', 'plain', 'html'].map(s => `<option ${clOpts.style === s ? 'selected' : ''}>${s}</option>`).join('')}</select></div>
+    <label class="row"><input type="checkbox" id="cllinks" ${clOpts.links ? 'checked' : ''}> links</label>
+    <label class="row"><input type="checkbox" id="clvers" ${clOpts.versions ? 'checked' : ''}> version numbers</label>
+    <label class="row"><input type="checkbox" id="clblocked" ${clOpts.blocked ? 'checked' : ''}> incompatible list</label>
+  </div></div>
+  <div class="grid2">
+    <div class="panel"><header><h2>Version changelog</h2><div class="spacer"></div>
+      <button class="btn sm" data-act="copy:cl">Copy</button><button class="btn sm" data-act="dl:cl">Save .md</button></header>
+      <div class="body"><textarea class="out" id="clout">${esc(text)}</textarea></div></div>
+    <div class="panel"><header><h2>Pack status post</h2><div class="spacer"></div>
+      <button class="btn sm" data-act="copy:st">Copy</button></header>
+      <div class="body"><textarea class="out" id="stout" style="min-height:200px">${esc(status)}</textarea>
+      <p class="hint" style="color:var(--faint);font-size:12px;margin:10px 0 0">This is the block you pin on the description or attach to the newest version, so people know which mods are waiting on their authors.</p>
+      </div></div>
+  </div>
+  <div class="panel"><header><h2>Full mod list</h2><span class="sub">markdown table for the description page</span><div class="spacer"></div>
+    <button class="btn sm" data-act="copy:tbl">Copy</button></header>
+    <div class="body"><textarea class="out" id="tblout" style="min-height:180px">${esc(buildModTable())}</textarea></div></div>`;
+}
+
+/* ---------------- snapshots ---------------- */
+function takeSnapshot(label) {
+  const s = {
+    id: uid(), ts: Date.now(), label: label || (S.settings.packName + ' ' + S.settings.packVersion),
+    packVersion: S.settings.packVersion, mc: S.settings.target,
+    mods: S.mods.map(m => ({ pid: m.pid, title: m.title, slug: m.slug, verNum: m.verNum, verId: m.verId }))
+  };
+  S.snapshots.unshift(s);
+  if (!clOpts.base) clOpts.base = s.id;
+  logit('snapshot', 'Snapshot saved: ' + s.label + ' (' + s.mods.length + ' mods)');
+  save(); render(); toast('Snapshot saved');
+}
+function viewSnapshots() {
+  if (!S.snapshots.length) return `
+    <div class="pagehead"><h1>Snapshots</h1></div>
+    <p class="lede">A snapshot is a frozen list of every mod and version at one moment. Take one right before you start updating, and the changelog writes itself afterwards.</p>
+    <div class="panel"><div class="empty"><h3>No snapshots yet</h3><p>Save one now to mark where ${esc(S.settings.packVersion)} stands.</p>
+    <button class="btn go" data-act="snapshot">Save snapshot</button></div></div>`;
+  return `
+  <div class="pagehead"><h1>Snapshots</h1><span class="sub">${S.snapshots.length} saved</span></div>
+  <div class="panel"><header><h2>Timeline</h2><div class="spacer"></div>
+    <button class="btn sm" data-act="snapshot">Save snapshot</button></header>
+    ${S.snapshots.map((s, i) => {
+      const prev = S.snapshots[i + 1];
+      const d = prev ? diffTwo(prev, s) : null;
+      return `<div class="item">
+        <time>${isoMin(s.ts)}</time>
+        <div class="grow"><b>${esc(s.label)}</b> <span class="tag t-idle">MC ${esc(s.mc)}</span>
+          <div style="color:var(--faint);font-size:12.5px;margin-top:2px">${s.mods.length} mods${d ? ` · +${d.added.length} added, ${d.updated.length} updated, −${d.removed.length} removed` : ''}</div></div>
+        <div class="rowbtns">
+          <button class="btn sm" data-act="usebase:${s.id}">Use as baseline</button>
+          <button class="btn sm" data-act="restore:${s.id}">Restore</button>
+          <button class="btn sm" data-act="delsnap:${s.id}">Delete</button></div></div>`;
+    }).join('')}
+  </div>`;
+}
+function diffTwo(a, b) {
+  const A = new Map(a.mods.map(m => [m.pid || m.title, m])), B = new Map(b.mods.map(m => [m.pid || m.title, m]));
+  const added = [], removed = [], updated = [];
+  B.forEach((m, k) => { const p = A.get(k); if (!p) added.push(m); else if (p.verNum !== m.verNum) updated.push(m); });
+  A.forEach((m, k) => { if (!B.has(k)) removed.push(m); });
+  return { added, removed, updated };
+}
+function restoreSnapshot(id) {
+  const s = S.snapshots.find(x => x.id === id); if (!s) return;
+  if (!confirm('Replace the current mod list with the snapshot from ' + fmtDate(s.ts) + '? Version numbers and pins come back; file hashes do not, so run a check afterwards.')) return;
+  S.mods = s.mods.map(m => ({ key: uid(), pid: m.pid, slug: m.slug, title: m.title, verId: m.verId, verNum: m.verNum, filename: m.title + '.jar', status: 'idle', flags: [], pinned: false, note: '' }));
+  S.settings.packVersion = s.packVersion || S.settings.packVersion;
+  logit('restore', 'Restored snapshot ' + s.label);
+  save(); render(); toast('Snapshot restored — run a check to refill the details');
+}
+
+/* ---------------- tasks ---------------- */
+function viewTasks() {
+  const open = S.tasks.filter(t => !t.done), done = S.tasks.filter(t => t.done);
+  return `
+  <div class="pagehead"><h1>To do</h1><span class="sub">${open.length} open</span></div>
+  <div class="panel"><div class="body row">
+    <input type="text" id="newtask" class="grow" placeholder="Something to remember for the next release">
+    <button class="btn" data-act="addtask">Add</button>
+    <button class="btn ghost" data-act="tasksfromblocked">Add every blocked mod</button>
+  </div></div>
+  <div class="panel"><header><h2>Open</h2></header>
+    ${open.length ? open.map(t => `<div class="item"><input type="checkbox" data-act="toggletask:${t.id}">
+      <div class="grow">${esc(t.text)}</div><time>${isoMin(t.ts)}</time>
+      <button class="btn sm" data-act="deltask:${t.id}">×</button></div>`).join('')
+      : '<div class="empty"><p>Nothing pending. Run a check and anything blocked can be dropped in here.</p></div>'}
+  </div>
+  ${done.length ? `<div class="panel"><header><h2>Done</h2><div class="spacer"></div>
+    <button class="btn sm" data-act="cleartasks">Clear finished</button></header>
+    ${done.map(t => `<div class="item"><input type="checkbox" checked data-act="toggletask:${t.id}">
+      <div class="grow" style="color:var(--faint);text-decoration:line-through">${esc(t.text)}</div></div>`).join('')}</div>` : ''}`;
+}
+
+/* ---------------- history ---------------- */
+function viewLog() {
+  return `
+  <div class="pagehead"><h1>History</h1><span class="sub">${S.log.length} entries</span></div>
+  <p class="lede">Everything Pack Bench did, newest first. Handy when a version goes out wrong and you need to retrace it.</p>
+  <div class="panel"><header><h2>Activity</h2><div class="spacer"></div>
+    <button class="btn sm" data-act="copy:log">Copy</button>
+    <button class="btn sm" data-act="dl:log">Save .md</button>
+    <button class="btn sm" data-act="clearlog">Clear</button></header>
+    ${S.log.length ? S.log.map(l => `<div class="logline"><time>${isoMin(l.ts)}</time><span class="kind">${esc(l.kind)}</span><span>${esc(l.text)}</span></div>`).join('')
+      : '<div class="empty"><p>Nothing logged yet.</p></div>'}
+  </div>`;
+}
+const logAsText = () => S.log.map(l => `- ${isoMin(l.ts)} · ${l.kind} · ${l.text}`).join('\n');
+
+/* ---------------- settings ---------------- */
+function viewSettings() {
+  const s = S.settings;
+  return `
+  <div class="pagehead"><h1>Settings</h1></div>
+  <div class="panel"><header><h2>Pack</h2></header><div class="body">
+    <div class="formrow"><div class="k">Name</div><div><input type="text" id="setName" value="${esc(s.packName)}"></div></div>
+    <div class="formrow"><div class="k">Modrinth slug</div><div><input type="text" id="setSlug" value="${esc(s.slug)}">
+      <div class="hint">modrinth.com/modpack/<b>${esc(s.slug)}</b></div></div></div>
+    <div class="formrow"><div class="k">Version number</div><div><div class="row">
+      <input type="text" id="setVer" class="grow" value="${esc(s.packVersion)}">
+      <button class="btn sm" data-act="bump:patch">+ patch</button>
+      <button class="btn sm" data-act="bump:minor">+ minor</button></div></div></div>
+    <div class="formrow"><div class="k">Loader</div><div><select class="box" id="setLoader">
+      ${['fabric', 'quilt', 'neoforge', 'forge'].map(l => `<option ${s.loader === l ? 'selected' : ''}>${l}</option>`).join('')}</select></div></div>
+    <div class="formrow"><div class="k">Loader version</div><div><input type="text" id="setLoaderVer" value="${esc(s.loaderVersion || '')}" placeholder="e.g. 0.17.2 — used when rebuilding the .mrpack"></div></div>
+  </div></div>
+
+  <div class="panel"><header><h2>Checking</h2></header><div class="body">
+    <div class="formrow"><div class="k">Minecraft versions</div><div>
+      <input type="text" id="setTargets" value="${esc(s.targets.join(', '))}">
+      <div class="hint">Comma separated. These fill the picker in the top bar.</div></div></div>
+    <div class="formrow"><div class="k">Accept builds marked</div><div class="row">
+      ${['release', 'beta', 'alpha'].map(c => `<label class="row"><input type="checkbox" data-ch="${c}" ${s.channels[c] ? 'checked' : ''}> ${c}</label>`).join('')}
+      <div class="hint" style="flex-basis:100%">Turn on beta if you are happy shipping pre-release mod builds.</div></div></div>
+    <div class="formrow"><div class="k">Flag server-side mods</div><div>
+      <label class="row"><input type="checkbox" id="setClientOnly" ${s.clientOnly ? 'checked' : ''}> Warn when a mod requires the server, since this pack promises vanilla-server play</label></div></div>
+  </div></div>
+
+  <div class="panel"><header><h2>Your data</h2><span class="sub">stored in this browser only</span></header><div class="body row">
+    <button class="btn" data-act="backup">Export everything as JSON</button>
+    <button class="btn" data-act="restorefile">Import a backup</button>
+    <button class="btn" data-act="wipe">Reset Pack Bench</button>
+  </div></div>
+
+  <div class="panel"><header><h2>How the pieces fit</h2></header><div class="body">
+    <ul class="plain" style="color:var(--dim);max-width:70ch">
+      <li>Load your <span class="mono">.mrpack</span>, and every jar is matched back to its Modrinth project by file hash.</li>
+      <li>A check asks Modrinth for the newest build of each mod for the target version, and records what the stragglers are still targeting.</li>
+      <li>Snapshot before you change anything. The changelog is the difference between that snapshot and now.</li>
+      <li>Build updated .mrpack writes a fresh pack file with the new mod versions and your original overrides folder untouched.</li>
+      <li>Nothing is uploaded anywhere. Publishing to Modrinth is still a manual upload, on purpose.</li>
+    </ul></div></div>`;
+}
+
+/* ---------------- exports ---------------- */
+function buildIndexJson() {
+  const deps = { minecraft: S.settings.target };
+  if (S.settings.loader === 'fabric') deps['fabric-loader'] = S.settings.loaderVersion || PACKDEPS['fabric-loader'] || '0.16.0';
+  if (S.settings.loader === 'quilt') deps['quilt-loader'] = S.settings.loaderVersion || PACKDEPS['quilt-loader'] || '0.26.0';
+  if (S.settings.loader === 'neoforge') deps['neoforge'] = S.settings.loaderVersion || PACKDEPS['neoforge'] || '21.0.0';
+  if (S.settings.loader === 'forge') deps['forge'] = S.settings.loaderVersion || PACKDEPS['forge'] || '';
+  return {
+    formatVersion: 1, game: 'minecraft',
+    versionId: S.settings.packVersion, name: S.settings.packName + ' ' + S.settings.packVersion,
+    summary: 'Built with Pack Bench on ' + new Date().toISOString().slice(0, 10),
+    files: S.mods.filter(m => m.url && m.sha512).map(m => ({
+      path: m.path || ('mods/' + m.filename),
+      hashes: { sha1: m.sha1, sha512: m.sha512 },
+      env: m.env || { client: 'required', server: m.serverSide === 'unsupported' ? 'unsupported' : 'optional' },
+      downloads: [m.url], fileSize: m.size
+    })),
+    dependencies: deps
+  };
+}
+function rebuildPack() {
+  const index = buildIndexJson();
+  const skipped = S.mods.length - index.files.length;
+  const files = [{ name: 'modrinth.index.json', data: new TextEncoder().encode(JSON.stringify(index, null, 2)) },
+    ...OVERRIDES.map(o => ({ name: o.name, data: o.data }))];
+  const blob = makeZip(files);
+  const name = S.settings.packName.replace(/\s+/g, '-') + '-' + S.settings.packVersion + '.mrpack';
+  download(name, blob);
+  logit('build', 'Built ' + name + ' with ' + index.files.length + ' mods' + (OVERRIDES.length ? ' and ' + OVERRIDES.length + ' override files' : ''));
+  toast(skipped ? name + ' built — ' + skipped + ' mods skipped, they have no download link' : name + ' built');
+}
+function alertBox(title, msg) {
+  $('#dlgtitle').textContent = title;
+  $('#dlgbody').innerHTML = '<p style="margin:0;color:var(--dim)">' + esc(msg) + '</p>';
+  $('#dlgfoot').innerHTML = '<button class="btn go" onclick="document.getElementById(\'dlg\').close()">Got it</button>';
+  $('#dlg').showModal();
+}
+
+/* ---------------- wiring ---------------- */
+async function addModByRef(ref) {
+  const slug = String(ref).trim().replace(/^https?:\/\/modrinth\.com\/(mod|plugin|shader|resourcepack|datapack)\//, '').replace(/[/?#].*$/, '');
+  if (!slug) return;
+  busy(true, 'Looking up ' + slug, 30);
+  try {
+    const p = await mr('/project/' + encodeURIComponent(slug));
+    if (S.mods.some(m => m.pid === p.id)) { toast(p.title + ' is already in the pack'); return; }
+    const vs = await projectVersions(p.id);
+    const fits = vs.filter(v => fitsTarget(v, S.settings.target, S.settings.loader) && channelOK(v));
+    const v = fits.length ? pickNewest(fits) : null;
+    const f = v ? primaryFile(v) : null;
+    S.mods.push({
+      key: uid(), pid: p.id, slug: p.slug, title: p.title, clientSide: p.client_side, serverSide: p.server_side,
+      categories: p.categories, projStatus: p.status,
+      verId: v?.id || null, verNum: v?.version_number || '?', filename: f?.filename || (p.slug + '.jar'),
+      path: 'mods/' + (f?.filename || p.slug + '.jar'), url: f?.url || '', size: f?.size,
+      sha1: f?.hashes?.sha1 || '', sha512: f?.hashes?.sha512 || '',
+      status: v ? 'update' : 'blocked', tgtVerId: v?.id, tgtVerNum: v?.version_number,
+      tgtUrl: f?.url, tgtSha1: f?.hashes?.sha1, tgtSha512: f?.hashes?.sha512, tgtSize: f?.size, tgtFilename: f?.filename,
+      newestMC: v ? null : ((pickNewest(vs)?.game_versions || []).slice().sort().pop() || null),
+      flags: [], pinned: false, note: ''
+    });
+    logit('add', 'Added ' + p.title + (v ? ' ' + v.version_number : ' (no build for ' + S.settings.target + ')'));
+    save(); render(); toast(p.title + ' added');
+  } catch (e) { alertBox('Could not add that mod', apiFail(e)); }
+  finally { busy(false); }
+}
+function act(a) {
+  const [name, arg] = a.split(':');
+  const M = k => S.mods.find(m => m.key === k);
+  switch (name) {
+    case 'tab': go(arg); break;
+    case 'check': checkAll(); break;
+    case 'pick': $('#filepick').click(); break;
+    case 'fetchpack': loadFromModrinth(); break;
+    case 'applyall': applyUpdates(null); break;
+    case 'apply': applyUpdates([arg]); $('#dlg').close(); break;
+    case 'snapshot': takeSnapshot(); break;
+    case 'usebase': clOpts.base = arg; go('changelog'); break;
+    case 'restore': restoreSnapshot(arg); break;
+    case 'delsnap': S.snapshots = S.snapshots.filter(s => s.id !== arg); save(); render(); break;
+    case 'savemod': { const m = M(arg); if (m) { m.pinned = $('#mpin').checked; m.note = $('#mnote').value; save(); } $('#dlg').close(); render(); toast('Saved'); break; }
+    case 'removemod': { const m = M(arg); if (m && confirm('Remove ' + m.title + ' from the pack list?')) { S.mods = S.mods.filter(x => x.key !== arg); logit('remove', 'Removed ' + m.title); save(); render(); } $('#dlg').close(); break; }
+    case 'addmod': { const r = prompt('Modrinth slug or URL, e.g. sodium or https://modrinth.com/mod/sodium'); if (r) addModByRef(r); break; }
+    case 'rebuild': rebuildPack(); break;
+    case 'indexjson': download('modrinth.index.json', JSON.stringify(buildIndexJson(), null, 2), 'application/json'); break;
+    case 'addtask': { const i = $('#newtask'); if (i.value.trim()) { S.tasks.unshift({ id: uid(), text: i.value.trim(), done: false, ts: Date.now() }); save(); render(); } break; }
+    case 'toggletask': { const t = S.tasks.find(x => x.id === arg); if (t) { t.done = !t.done; save(); render(); } break; }
+    case 'deltask': S.tasks = S.tasks.filter(x => x.id !== arg); save(); render(); break;
+    case 'cleartasks': S.tasks = S.tasks.filter(t => !t.done); save(); render(); break;
+    case 'tasksfromblocked': {
+      let n = 0;
+      S.mods.filter(m => m.status === 'blocked').forEach(m => {
+        const text = 'Wait on ' + m.title + ' for MC ' + S.settings.target + (m.newestMC ? ' (still on ' + m.newestMC + ')' : '');
+        if (!S.tasks.some(t => t.text === text)) { S.tasks.unshift({ id: uid(), text, done: false, ts: Date.now() }); n++; }
+      });
+      save(); render(); toast(n + ' added to your to-do'); break;
+    }
+    case 'copy': {
+      if (arg === 'cl') copy($('#clout').value, 'Changelog');
+      if (arg === 'st') copy($('#stout').value, 'Status block');
+      if (arg === 'tbl') copy($('#tblout').value, 'Mod table');
+      if (arg === 'log') copy(logAsText(), 'History');
+      break;
+    }
+    case 'dl': {
+      if (arg === 'cl') download(S.settings.packName.replace(/\s+/g, '-') + '-' + S.settings.packVersion + '-changelog.md', $('#clout').value, 'text/markdown');
+      if (arg === 'log') download('packbench-history.md', logAsText(), 'text/markdown');
+      break;
+    }
+    case 'clearlog': if (confirm('Clear the history?')) { S.log = []; save(); render(); } break;
+    case 'bump': {
+      const p = (S.settings.packVersion.match(/\d+/g) || ['1', '0', '0']).map(Number);
+      while (p.length < 3) p.push(0);
+      if (arg === 'patch') p[2]++; else { p[1]++; p[2] = 0; }
+      S.settings.packVersion = p.join('.'); save(); render(); break;
+    }
+    case 'backup': download('packbench-backup-' + new Date().toISOString().slice(0, 10) + '.json', JSON.stringify(S, null, 2), 'application/json'); break;
+    case 'restorefile': { const i = $('#filepick'); i.dataset.mode = 'backup'; i.click(); break; }
+    case 'wipe': if (confirm('Erase all mods, snapshots, tasks and history from this browser?')) { S = { settings: { ...DEFAULTS }, mods: [], snapshots: [], tasks: [], log: [], lastCheck: null }; save(); render(); } break;
+  }
+}
+function wire() {
+  document.querySelectorAll('[data-tab]').forEach(n => n.onclick = () => go(n.dataset.tab));
+  document.querySelectorAll('[data-act]').forEach(n => { if (n.tagName === 'INPUT') n.onchange = () => act(n.dataset.act); else n.onclick = () => act(n.dataset.act); });
+  document.querySelectorAll('[data-open]').forEach(n => n.onclick = () => openMod(n.dataset.open));
+  document.querySelectorAll('[data-filter]').forEach(n => n.onclick = () => { filter.status = n.dataset.filter; render(); });
+  document.querySelectorAll('[data-sort]').forEach(n => n.onclick = () => {
+    filter.dir = filter.sort === n.dataset.sort ? -filter.dir : 1; filter.sort = n.dataset.sort; render();
+  });
+  const q = $('#q'); if (q) { q.oninput = () => { filter.q = q.value; const p = q.selectionStart; render(); const n = $('#q'); n.focus(); n.setSelectionRange(p, p); }; }
+  const nt = $('#newtask'); if (nt) nt.onkeydown = e => { if (e.key === 'Enter') act('addtask'); };
+  ['clbase|base', 'clstyle|style'].forEach(pair => {
+    const [id, k] = pair.split('|'); const n = document.getElementById(id);
+    if (n) n.onchange = () => { clOpts[k] = n.value; render(); };
+  });
+  [['cllinks', 'links'], ['clvers', 'versions'], ['clblocked', 'blocked']].forEach(([id, k]) => {
+    const n = document.getElementById(id); if (n) n.onchange = () => { clOpts[k] = n.checked; render(); };
+  });
+  const setters = { setName: 'packName', setSlug: 'slug', setVer: 'packVersion', setLoader: 'loader', setLoaderVer: 'loaderVersion' };
+  Object.entries(setters).forEach(([id, k]) => {
+    const n = document.getElementById(id);
+    if (n) n.onchange = () => { S.settings[k] = n.value.trim(); save(); render(); };
+  });
+  const tg = $('#setTargets');
+  if (tg) tg.onchange = () => {
+    S.settings.targets = tg.value.split(',').map(s => s.trim()).filter(Boolean);
+    if (!S.settings.targets.includes(S.settings.target)) S.settings.target = S.settings.targets[0] || S.settings.target;
+    save(); render();
+  };
+  document.querySelectorAll('[data-ch]').forEach(n => n.onchange = () => { S.settings.channels[n.dataset.ch] = n.checked; save(); });
+  const co = $('#setClientOnly'); if (co) co.onchange = () => { S.settings.clientOnly = co.checked; save(); };
+  const drop = $('#drop');
+  if (drop) {
+    drop.ondragover = e => { e.preventDefault(); drop.classList.add('hot'); };
+    drop.ondragleave = () => drop.classList.remove('hot');
+    drop.ondrop = e => { e.preventDefault(); e.stopPropagation(); drop.classList.remove('hot'); handleFile(e.dataTransfer.files[0]); };
+  }
+}
+async function handleFile(file, mode) {
+  if (!file) return;
+  try {
+    if (mode === 'backup' || /\.json$/i.test(file.name) && mode !== 'pack') {
+      const data = JSON.parse(await file.text());
+      if (data.mods) { S = { ...S, ...data }; save(); render(); toast('Backup restored'); return; }
+    }
+    busy(true, 'Reading ' + file.name, 20);
+    await ingestMrpack(await file.arrayBuffer(), file.name);
+  } catch (e) { alertBox('Could not read that file', String(e.message || e)); }
+  finally { busy(false); }
+}
+
+/* ---------------- boot ---------------- */
+(async function init() {
+  await load();
+  if (!clOpts.base && S.snapshots[0]) clOpts.base = S.snapshots[0].id;
+  render();
+  $('#mcsel').onchange = e => { S.settings.target = e.target.value; save(); render(); toast('Target set to MC ' + e.target.value); };
+  $('#btncheck').onclick = () => checkAll();
+  $('#btnload').onclick = () => {
+    $('#dlgtitle').textContent = 'Load the pack';
+    $('#dlgbody').innerHTML = `<p style="margin-top:0;color:var(--dim)">Two ways in. The file you have locally is always the most accurate.</p>
+      <div class="row" style="gap:10px">
+        <button class="btn go" data-act="pick">Choose a .mrpack file</button>
+        <button class="btn" data-act="fetchpack">Pull the newest published version</button>
+      </div>
+      <p style="color:var(--faint);font-size:12.5px;margin-bottom:0">Pulling from Modrinth downloads the .mrpack attached to your latest version of <span class="mono">${esc(S.settings.slug)}</span>.</p>`;
+    $('#dlgfoot').innerHTML = '';
+    document.querySelectorAll('#dlgbody [data-act]').forEach(n => n.onclick = () => { $('#dlg').close(); act(n.dataset.act); });
+    $('#dlg').showModal();
+  };
+  $('#filepick').onchange = e => {
+    const mode = e.target.dataset.mode; e.target.dataset.mode = '';
+    handleFile(e.target.files[0], mode); e.target.value = '';
+  };
+  document.addEventListener('keydown', e => {
+    if (e.key === '/' && !/input|textarea|select/i.test(document.activeElement.tagName)) {
+      if (tab !== 'mods') go('mods');
+      e.preventDefault(); $('#q')?.focus();
+    }
+    if (e.key.toLowerCase() === 's' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); takeSnapshot(); }
+  });
+  window.addEventListener('dragover', e => e.preventDefault());
+  window.addEventListener('drop', e => {
+    if (e.dataTransfer?.files?.length) { e.preventDefault(); handleFile(e.dataTransfer.files[0]); }
+  });
+})();
+
+</script>
+</body>
+</html>
